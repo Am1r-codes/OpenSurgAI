@@ -1,2 +1,15 @@
+# Environments
 venv/
+.env/
+
+# Conda
+__pycache__/
+*.pyc
+
+# Data (never commit raw datasets)
 data/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
