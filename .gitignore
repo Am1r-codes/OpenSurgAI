@@ -7,9 +7,17 @@ __pycache__/
 *.pyc
 
 # Data (never commit raw datasets)
-data/
+data
+
+# Model weights
+*.pt
+weights/
+
+# Experiment outputs
+experiments/
 
 # OS / editor junk
 .DS_Store
 Thumbs.db
 .vscode/
+.claude/
