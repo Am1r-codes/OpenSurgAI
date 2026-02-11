@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -203,7 +204,9 @@ def generate_report(
             user=user_prompt,
         )
         choices = response.get("choices", [])
-        report = choices[0]["message"]["content"].strip() if choices else ""
+        raw = choices[0]["message"]["content"].strip() if choices else ""
+        # Strip Nemotron's internal <think> blocks
+        report = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
         usage = response.get("usage", {})
 
         prompt_tok = usage.get("prompt_tokens", 0)

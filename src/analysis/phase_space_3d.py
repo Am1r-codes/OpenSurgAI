@@ -478,6 +478,157 @@ def build_workflow_figure(
     return fig
 
 
+# ── Multi-surgery comparison figure ──────────────────────────────────
+
+# Distinct colours per surgery (not per phase) for comparison mode.
+SURGERY_COLOURS: list[str] = [
+    "#00ccff",  # cyan
+    "#ff6600",  # orange
+    "#33ff33",  # lime
+    "#ff33cc",  # pink
+    "#ffff00",  # yellow
+]
+
+
+def build_comparison_figure(
+    spaces: list[dict],
+    point_size: int = 3,
+    downsample: int = 5,
+) -> "go.Figure":
+    """Build a Plotly 3D figure overlaying multiple surgical trajectories.
+
+    Each surgery gets a unique colour so trajectory differences are
+    immediately visible.  Phase identity (Y-axis) is shared across all
+    surgeries, making it easy to compare timing and activity patterns.
+
+    Parameters
+    ----------
+    spaces : list[dict]
+        List of space dicts from :func:`build_semantic_phase_space`.
+    point_size : int
+        Base marker size.
+    downsample : int
+        Plot every Nth point per surgery.
+    """
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+    step = max(1, downsample)
+
+    for s_idx, space in enumerate(spaces):
+        vid = space["video_id"]
+        colour = SURGERY_COLOURS[s_idx % len(SURGERY_COLOURS)]
+
+        x = space["phase_progress"][::step]
+        y = space["phase_idx"][::step]
+        z = space["activity"][::step]
+        t = space["time"][::step]
+        names = space["phase_names"][::step]
+        conf = space["confidence"][::step]
+
+        hover = [
+            f"<b>{vid}</b><br>"
+            f"Phase: {n}<br>"
+            f"Progress: {xv:.0%}<br>"
+            f"Activity: {zv:.3f}<br>"
+            f"Time: {tv:.1f}s<br>"
+            f"Confidence: {cv:.3f}"
+            for n, xv, zv, tv, cv in zip(names, x, z, t, conf)
+        ]
+
+        # Trajectory line
+        fig.add_trace(go.Scatter3d(
+            x=x, y=y, z=z,
+            mode="lines",
+            line=dict(color=colour, width=2),
+            opacity=0.3,
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+        # Point cloud
+        fig.add_trace(go.Scatter3d(
+            x=x, y=y, z=z,
+            mode="markers",
+            marker=dict(size=point_size, color=colour, opacity=0.7),
+            text=hover,
+            hoverinfo="text",
+            name=vid,
+            legendgroup=vid,
+        ))
+
+    # Shared axis labels
+    y_ticks = list(range(len(PHASE_ORDER)))
+    y_labels = [f"{i}: {name}" for i, name in enumerate(PHASE_ORDER)]
+
+    fig.update_layout(
+        title=dict(
+            text=(
+                "Multi-Surgery Comparison<br>"
+                "<sub>Trajectories overlaid in shared workflow space</sub>"
+            ),
+            x=0.5,
+        ),
+        scene=dict(
+            xaxis=dict(title="Phase Progression", range=[-0.05, 1.05]),
+            yaxis=dict(
+                title="Phase Identity",
+                tickvals=y_ticks,
+                ticktext=y_labels,
+            ),
+            zaxis=dict(title="Surgical Activity / Complexity", range=[-0.05, 1.05]),
+            camera=dict(eye=dict(x=1.8, y=-1.2, z=0.9)),
+        ),
+        legend=dict(
+            x=0.01, y=0.99,
+            bgcolor="rgba(0,0,0,0.5)",
+            font=dict(size=11),
+        ),
+        margin=dict(l=0, r=0, t=80, b=0),
+        template="plotly_dark",
+    )
+
+    return fig
+
+
+def build_comparison_summary(spaces: list[dict]) -> str:
+    """Build a structured text summary comparing multiple surgeries.
+
+    This is used as context for Nemotron comparison Q&A.
+    """
+    lines = ["MULTI-SURGERY COMPARISON DATA", "=" * 40, ""]
+
+    for space in spaces:
+        vid = space["video_id"]
+        segments = get_phase_segments(space)
+        transitions = get_transition_points(space)
+        duration = float(space["time"][-1] - space["time"][0])
+        n_frames = len(space["time"])
+        unique_phases = sorted(set(space["phase_names"]))
+        avg_conf = float(space["confidence"].mean())
+        avg_activity = float(space["activity"].mean())
+
+        lines.append(f"--- {vid} ---")
+        lines.append(f"  Duration: {duration:.0f}s ({duration/60:.1f} min)")
+        lines.append(f"  Frames: {n_frames:,}")
+        lines.append(f"  Phases seen: {len(unique_phases)} ({', '.join(unique_phases)})")
+        lines.append(f"  Phase segments: {len(segments)}")
+        lines.append(f"  Transitions: {len(transitions)}")
+        lines.append(f"  Avg confidence: {avg_conf:.3f}")
+        lines.append(f"  Avg activity: {avg_activity:.3f}")
+
+        lines.append("  Phase timeline:")
+        for seg in segments:
+            lines.append(
+                f"    {seg['phase_name']}: "
+                f"{seg['start_time']:.0f}s-{seg['end_time']:.0f}s "
+                f"({seg['duration']:.0f}s, {seg['frame_count']} frames)"
+            )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # ── File-saving wrapper (for CLI) ───────────────────────────────────
 
 def plot_phase_space_3d(

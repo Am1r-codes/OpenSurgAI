@@ -349,7 +349,12 @@ class ExplanationPipeline:
                 user=user_prompt,
             )
             choices = response.get("choices", [])
-            text = choices[0]["message"]["content"].strip() if choices else fallback
+            raw = choices[0]["message"]["content"].strip() if choices else fallback
+            # Strip Nemotron's internal <think> blocks
+            import re
+            text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+            if not text:
+                text = fallback
             usage = response.get("usage", {})
         except Exception as exc:
             log.warning("Nemotron call failed, using fallback: %s", exc)

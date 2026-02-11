@@ -216,13 +216,9 @@ class DemoRecorder:
                         if phase_id is not None and phase_id != prev_phase_id:
                             card_text = PHASE_EXPLANATIONS.get(phase_name, "")
                             if card_text:
-                                # Get system comment from explanation data if available
-                                sys_comment = ""
-                                if expl_rec:
-                                    sys_comment = expl_rec.get("system_comment", "")
                                 card = self.renderer.render_title_card(
                                     bgr_frame, phase_name, phase_id,
-                                    card_text, sys_comment,
+                                    card_text,
                                 )
                                 for _ in range(self.title_card_frames):
                                     writer.write(card)

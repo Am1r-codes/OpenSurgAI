@@ -2,7 +2,7 @@
 
 **AI-powered surgical workflow analysis for laparoscopic cholecystectomy.**
 
-End-to-end pipeline combining real-time computer vision (YOLO11x, ResNet50, segmentation) with NVIDIA Nemotron Super 49B for post-hoc surgical reasoning and case review.  Built on the [Cholec80](http://camma.u-strasbg.fr/datasets) dataset.
+End-to-end pipeline combining real-time computer vision (YOLO11x, ResNet50, segmentation) with NVIDIA Nemotron Super 49B for post-hoc surgical reasoning, multi-surgery comparison, and case review.  Built on the [Cholec80](http://camma.u-strasbg.fr/datasets) dataset.
 
 > Submitted for the NVIDIA GTC 2026 Golden Ticket.
 
@@ -226,11 +226,21 @@ OpenSurgAI/
 
 The Streamlit dashboard provides a three-panel case review interface:
 
-- **LEFT** — Pre-rendered annotated video (auto-playing) with auto-synced phase info
+- **LEFT** — Pre-rendered annotated video (auto-playing) with auto-synced phase info and a **time slider** to scrub the 3D cursor to any point in the procedure
 - **CENTER** — Interactive 3D Semantic Surgical Workflow Space with trajectory lines and active phase highlighting
 - **RIGHT** — Nemotron Q&A with preset questions and hidden reasoning
 
 A virtual playback clock provides approximate synchronisation between video playback and UI state.  Full case reports can be generated with one click.
+
+### Multi-surgery comparison
+
+The dashboard includes a **Compare Surgeries** section where you can select multiple processed videos and overlay their 3D workflow trajectories in a single figure.  Each surgery is rendered in a distinct colour so structural differences (duration, phase ordering, revisits) are immediately visible.
+
+A dedicated **Nemotron Q&A panel** lets you ask comparative questions ("Which surgery was more complex?", "What phase timing differences stand out?") with full context of all selected procedures.
+
+### Video upload
+
+Upload your own surgical video directly through the sidebar.  The dashboard will run the full pipeline automatically (detection → phase recognition → scene assembly → 3D workflow space → overlay recorder) and add the result to the video selector.
 
 ---
 
@@ -253,6 +263,7 @@ torch>=2.2.0
 torchvision>=0.17.0
 ultralytics>=8.1.0
 opencv-python-headless>=4.9.0
+imageio-ffmpeg>=0.5.1
 httpx>=0.27.0
 plotly>=5.18.0
 streamlit>=1.31.0

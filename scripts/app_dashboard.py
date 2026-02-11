@@ -18,11 +18,10 @@ Design choices (documented per spec):
     PRE-RENDERED by the dashboard recorder.  No real-time inference
     runs inside this UI.
 
-  WHY AUTO-SYNC:
-    A virtual playback clock (time.monotonic-based) provides approximate
-    synchronisation between video playback and UI state.  Exact sync is
-    not possible via st.video; approximate sync is acceptable.  The page
-    auto-reruns at ~1.5 s intervals to advance the virtual clock.
+  WHY TIME SLIDER:
+    Streamlit cannot read the actual video playback position.  A time
+    slider lets the user manually set the analysis point.  The 3D cursor
+    and phase info update instantly when the slider moves.
 
   WHAT THE 3D SPACE REPRESENTS:
     The 3D Semantic Surgical Workflow Space represents procedural
@@ -46,8 +45,9 @@ Launch:
 from __future__ import annotations
 
 import bisect
+import re
+import subprocess
 import sys
-import time
 from pathlib import Path
 
 # Ensure project root is importable
@@ -61,6 +61,8 @@ from src.analysis.phase_space_3d import (
     PHASE_COLOURS,
     PHASE_ORDER,
     PHASE_TO_INDEX,
+    build_comparison_figure,
+    build_comparison_summary,
     build_semantic_phase_space,
     build_workflow_figure,
     get_phase_segments,
@@ -81,10 +83,6 @@ st.set_page_config(
 
 # ── Constants ────────────────────────────────────────────────────────
 
-# How often the page auto-reruns to advance the virtual clock.
-# Lower = smoother updates but more Plotly redraws.
-# Higher = less flickering but coarser time tracking.
-_REFRESH_INTERVAL_SEC = 1.5
 
 
 # ── Utility: time display formatting ────────────────────────────────
@@ -155,8 +153,16 @@ You may omit Part 2 if the answer is brief and self-contained.\
 
 
 # ── Response parsing ────────────────────────────────────────────────
-# Split Nemotron output into ANSWER (always visible) and REASONING
-# (hidden behind an expander by default).
+# Strip Nemotron's internal <think> blocks and split into ANSWER
+# (always visible) and REASONING (hidden behind an expander).
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def strip_think_tags(text: str) -> str:
+    """Remove <think>...</think> blocks from Nemotron output."""
+    return _THINK_RE.sub("", text).strip()
+
 
 def split_answer_reasoning(text: str) -> tuple[str, str]:
     """Split Nemotron response into (answer, reasoning).
@@ -164,6 +170,7 @@ def split_answer_reasoning(text: str) -> tuple[str, str]:
     Reasoning is hidden by default in the UI to keep the interface
     calm and focused on the educational answer.
     """
+    text = strip_think_tags(text)
     marker = "---REASONING---"
     if marker in text:
         parts = text.split(marker, 1)
@@ -280,6 +287,58 @@ def lookup_frame_at_time(space: dict, time_sec: float) -> dict:
     }
 
 
+# ── Pipeline runner for uploaded videos ──────────────────────────────
+
+_PYTHON = str(Path(sys.executable))
+
+
+def _run_pipeline(video_path: Path, video_id: str, api_key: str | None) -> None:
+    """Run the full analysis pipeline on an uploaded video."""
+    steps = [
+        ("Detection", [
+            _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_detection.py"),
+            "--video", str(video_path),
+        ]),
+        ("Phase Recognition", [
+            _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_phase_recognition.py"),
+            "--video", str(video_path),
+            "--model-weights", str(_PROJECT_ROOT / "weights" / "phase_resnet50.pt"),
+        ]),
+        ("Scene Assembly", [
+            _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_scene_assembly.py"),
+            "--video", video_id,
+        ]),
+        ("3D Workflow Space", [
+            _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_phase_space.py"),
+            "--video", video_id,
+        ]),
+        ("Dashboard Recorder", [
+            _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_dashboard.py"),
+            "--video", str(video_path),
+        ]),
+    ]
+
+    progress = st.sidebar.progress(0, text="Starting pipeline...")
+    for i, (name, cmd) in enumerate(steps):
+        progress.progress((i) / len(steps), text=f"Running {name}...")
+        try:
+            env = dict(__import__("os").environ)
+            env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=1800, env=env,
+                cwd=str(_PROJECT_ROOT),
+            )
+            if result.returncode != 0:
+                st.sidebar.warning(f"{name} failed: {result.stderr[-300:]}")
+        except subprocess.TimeoutExpired:
+            st.sidebar.warning(f"{name} timed out (30min limit)")
+        except Exception as exc:
+            st.sidebar.warning(f"{name} error: {exc}")
+
+    progress.progress(1.0, text="Pipeline complete!")
+    st.sidebar.success(f"Processed {video_id}. Select it from the Video dropdown.")
+
+
 # ── Sidebar ──────────────────────────────────────────────────────────
 
 def render_sidebar() -> dict:
@@ -331,6 +390,31 @@ def render_sidebar() -> dict:
         help="NEMOTRON_API_KEY or NVIDIA_API_KEY. Leave blank to use env var.",
     )
 
+    # ── Upload & Process New Video ─────────────────────────────────
+    st.sidebar.divider()
+    st.sidebar.subheader("Upload New Video")
+    uploaded = st.sidebar.file_uploader(
+        "Upload a surgical video (.mp4)",
+        type=["mp4", "avi", "mkv"],
+        help="Upload a new video to process through the full pipeline.",
+    )
+
+    if uploaded is not None:
+        upload_dir = _PROJECT_ROOT / "data" / "uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        save_path = upload_dir / uploaded.name
+        vid_stem = save_path.stem  # e.g. "my_surgery"
+
+        if not save_path.exists():
+            with open(save_path, "wb") as f:
+                f.write(uploaded.getbuffer())
+            st.sidebar.success(f"Saved: {uploaded.name}")
+
+        if st.sidebar.button("Process Video", type="primary"):
+            _run_pipeline(save_path, vid_stem, api_key)
+            st.cache_data.clear()
+            st.rerun()
+
     return {
         "scene_dir": scene_dir,
         "dashboard_dir": dashboard_dir,
@@ -358,26 +442,9 @@ def main() -> None:
     summary_text = data["summary_text"]
     duration = summary["duration_sec"]
 
-    # ── Virtual playback clock ────────────────────────────────────
-    # Approximate synchronisation: a monotonic clock estimates where
-    # the video is.  This does NOT read actual video playback time
-    # (not possible via st.video).  Approximate sync is acceptable
-    # and documented.  The page auto-reruns at _REFRESH_INTERVAL_SEC
-    # intervals to advance the clock.
-    if "playback_start" not in st.session_state:
-        st.session_state["playback_start"] = time.monotonic()
-        st.session_state["playing"] = True
-
+    # ── Session state init ────────────────────────────────────────
     if "qa_history" not in st.session_state:
         st.session_state["qa_history"] = []
-
-    elapsed = time.monotonic() - st.session_state["playback_start"]
-    elapsed = min(elapsed, duration)  # clamp to video duration
-
-    if elapsed >= duration:
-        st.session_state["playing"] = False
-
-    cursor = lookup_frame_at_time(space, elapsed)
 
     # ── Header ───────────────────────────────────────────────────────
     st.title(f"Surgical Case Review — {video_id}")
@@ -387,11 +454,12 @@ def main() -> None:
     )
 
     # ── Metrics row ──────────────────────────────────────────────────
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3 = st.columns(3)
     m1.metric("Total Frames", f"{summary['total_frames']:,}")
     m2.metric("Duration", format_time(duration))
     m3.metric("Phase Segments", len(segments))
-    m4.metric("Transitions", len(transitions))
+
+    # Time slider for 3D cursor sync (placed in the layout below)
 
     # ── Three-column layout: LEFT | CENTER | RIGHT ───────────────────
     left_col, center_col, right_col = st.columns([1, 2, 1])
@@ -424,7 +492,20 @@ def main() -> None:
                 "Check directory paths in the sidebar."
             )
 
-        # Current position (auto-synced to virtual playback clock)
+        # Time slider — syncs the 3D cursor with the procedure timeline
+        analysis_time = st.slider(
+            "Analysis point",
+            min_value=0.0,
+            max_value=float(duration),
+            value=float(duration / 2),
+            step=1.0,
+            format="%d s",
+            help="Drag to move the 3D cursor. Match this to the video playback position.",
+        )
+        st.caption(f"Showing: **{format_time(analysis_time)}** / {format_time(duration)}")
+        cursor = lookup_frame_at_time(space, analysis_time)
+
+        # Current position
         phase_colour = PHASE_COLOURS[cursor["phase_idx"] % len(PHASE_COLOURS)]
 
         st.markdown("#### Current Position")
@@ -653,14 +734,116 @@ def main() -> None:
             mime="text/markdown",
         )
 
-    # ── Auto-advance: virtual playback clock ─────────────────────────
-    # The page auto-reruns at _REFRESH_INTERVAL_SEC intervals while
-    # playing.  This provides approximate synchronisation between
-    # the video playback and the UI state (3D cursor, phase info).
-    # Approximate sync is acceptable and documented.
-    if st.session_state.get("playing", False):
-        time.sleep(_REFRESH_INTERVAL_SEC)
-        st.rerun()
+    # ── Compare Surgeries Section ────────────────────────────────────
+    st.divider()
+    st.subheader("Compare Surgeries")
+    st.caption(
+        "Select multiple procedures to overlay in the 3D workflow space "
+        "and ask Nemotron to analyse differences."
+    )
+
+    all_videos = discover_videos(config["scene_dir"])
+    compare_videos = st.multiselect(
+        "Select videos to compare",
+        options=all_videos,
+        default=[video_id] if video_id in all_videos else [],
+        help="Pick 2-5 videos with scene data to compare their trajectories.",
+    )
+
+    if len(compare_videos) >= 2:
+        # Load all selected spaces
+        compare_spaces = []
+        for vid in compare_videos:
+            sp = str(Path(config["scene_dir"]) / f"{vid}_scene.jsonl")
+            try:
+                compare_spaces.append(build_semantic_phase_space(sp))
+            except Exception:
+                st.warning(f"Could not load {vid}")
+
+        if len(compare_spaces) >= 2:
+            comp_left, comp_right = st.columns([2, 1])
+
+            with comp_left:
+                comp_fig = build_comparison_figure(
+                    compare_spaces,
+                    point_size=config["point_size"],
+                    downsample=config["downsample"],
+                )
+                comp_fig.update_layout(height=600)
+                st.plotly_chart(comp_fig, use_container_width=True)
+
+            with comp_right:
+                st.markdown("#### Ask Nemotron about the comparison")
+
+                # Session state for comparison chat
+                if "compare_history" not in st.session_state:
+                    st.session_state["compare_history"] = []
+
+                comp_presets = [
+                    "Compare these surgeries for a trainee.",
+                    "Which surgery was more complex and why?",
+                    "What phase timing differences stand out?",
+                ]
+
+                comp_question: str | None = None
+                for cp in comp_presets:
+                    if st.button(cp, key=f"comp_{cp[:25]}"):
+                        comp_question = cp
+
+                comp_custom = st.text_area(
+                    "Your comparison question",
+                    value="",
+                    height=80,
+                    placeholder="e.g. Which surgery had a longer dissection phase?",
+                    key="comp_text_area",
+                ) or ""
+
+                if st.button("Ask about comparison", type="primary", key="comp_ask"):
+                    if comp_custom.strip():
+                        comp_question = comp_custom.strip()
+
+                if comp_question:
+                    comp_summary = build_comparison_summary(compare_spaces)
+                    with st.spinner("Nemotron is comparing..."):
+                        try:
+                            answer, reasoning, usage = query_nemotron(
+                                question=comp_question,
+                                summary_text=comp_summary,
+                                api_key=config["api_key"],
+                            )
+                            tok = usage.get("prompt_tokens", 0)
+                            ctok = usage.get("completion_tokens", 0)
+                            st.session_state["compare_history"].append({
+                                "question": comp_question,
+                                "answer": answer,
+                                "reasoning": reasoning,
+                                "tokens": f"{tok}+{ctok}",
+                            })
+                        except ValueError as exc:
+                            st.error(f"API key required: {exc}")
+                        except Exception as exc:
+                            st.error(f"Nemotron error: {exc}")
+
+                if st.session_state["compare_history"]:
+                    latest_c = st.session_state["compare_history"][-1]
+                    st.divider()
+                    st.markdown(f"**Q:** {latest_c['question']}")
+                    st.markdown(latest_c["answer"])
+                    if latest_c["reasoning"]:
+                        with st.expander("Show reasoning"):
+                            st.markdown(latest_c["reasoning"])
+                    st.caption(f"Tokens: {latest_c['tokens']}")
+
+                if len(st.session_state["compare_history"]) > 1:
+                    with st.expander("Previous comparisons", expanded=False):
+                        for entry in reversed(st.session_state["compare_history"][:-1]):
+                            st.markdown(f"**Q:** {entry['question']}")
+                            st.markdown(entry["answer"])
+                            st.caption(f"Tokens: {entry['tokens']}")
+                            st.divider()
+
+    elif len(compare_videos) == 1:
+        st.info("Select at least 2 videos to enable comparison.")
 
 
 if __name__ == "__main__":

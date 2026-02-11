@@ -122,6 +122,7 @@ class OverlayRenderer:
         show_confidence: bool = True,
         show_masks: bool = False,
         show_class_labels: bool = False,
+        show_detections: bool = False,
     ) -> None:
         self.mask_alpha = mask_alpha
         self.bbox_thickness = bbox_thickness
@@ -130,6 +131,7 @@ class OverlayRenderer:
         self.show_confidence = show_confidence
         self.show_masks = show_masks
         self.show_class_labels = show_class_labels
+        self.show_detections = show_detections
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._last_explanation: str | None = None
 
@@ -323,7 +325,7 @@ class OverlayRenderer:
             return frame
 
         h, w = frame.shape[:2]
-        max_chars = int(w / (self.font_scale * 14))
+        max_chars = int(w / (self.font_scale * 18))
         lines = _wrap_text(explanation, max_chars)
         lines = lines[: self.explanation_lines]
 
@@ -445,7 +447,7 @@ class OverlayRenderer:
 
         # Row 3: Canonical explanation text (wrapped, centred)
         desc_scale = self.font_scale * 1.0
-        max_chars = int(w / (desc_scale * 13))
+        max_chars = int(w / (desc_scale * 18))
         lines = _wrap_text(explanation, max_chars)
         (_, lh), _ = cv2.getTextSize("Tg", self._font, desc_scale, 1)
         line_height = int(lh * 2.0)
@@ -497,9 +499,14 @@ class OverlayRenderer:
             out = self.draw_mask(out, mask)
 
         # Layer 2: detection bounding boxes
-        instruments = scene.get("instruments", [])
-        if instruments:
-            out = self.draw_detections(out, instruments)
+        # Skipped by default — the generic COCO model produces misleading
+        # boxes on surgical video (e.g. "sandwich" on a gallbladder).
+        # Enable with show_detections=True when a surgical instrument
+        # model is available.
+        if self.show_detections:
+            instruments = scene.get("instruments", [])
+            if instruments:
+                out = self.draw_detections(out, instruments)
 
         # Layer 3: phase label + confidence bar (top-left)
         out = self.draw_phase(out, scene.get("phase"))
