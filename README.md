@@ -2,7 +2,7 @@
 
 **AI-powered surgical workflow analysis for laparoscopic cholecystectomy.**
 
-End-to-end pipeline combining real-time computer vision (YOLO11x, ResNet50, segmentation) with NVIDIA Nemotron Super 49B for post-hoc surgical reasoning, multi-surgery comparison, and case review.  Built on the [Cholec80](http://camma.u-strasbg.fr/datasets) dataset.
+End-to-end pipeline combining computer vision (YOLOv8s, ResNet50) with NVIDIA Nemotron Super 49B for post-hoc surgical reasoning, multi-surgery comparison, and case review.  Built on the [Cholec80](http://camma.u-strasbg.fr/datasets) dataset.
 
 > Submitted for the NVIDIA GTC 2026 Golden Ticket.
 
@@ -23,13 +23,13 @@ It is structured, post-hoc surgical case review powered by NVIDIA AI.
 Surgical Video (Cholec80)
          |
          v
-  +------+------+------+
-  |      |      |      |
-  v      v      v      v
-YOLO11x  ResNet50  Segmentation
-(instruments) (phase)  (anatomy)
-  |      |      |      |
-  +------+------+------+
+    +----+----+
+    |         |
+    v         v
+ YOLOv8s   ResNet50
+(detection) (phase)
+    |         |
+    +----+----+
          |
          v
    Scene Assembly
@@ -53,16 +53,16 @@ YOLO11x  ResNet50  Segmentation
               |
               v
      Nemotron Super 49B
-     (case reports, Q&A)
+     (case reports, Q&A,
+      multi-surgery comparison)
 ```
 
 ### Pipeline stages
 
 | Stage | Model / Tool | Output |
 |---|---|---|
-| Instrument detection | YOLO11x (`yolo11x.pt`) | Bounding boxes + class labels |
+| Instrument detection | YOLOv8s (Ultralytics) | Per-frame instrument count + metadata |
 | Phase recognition | ResNet50 (fine-tuned on Cholec80) | Phase ID + confidence per frame |
-| Anatomy segmentation | Mask model | Per-frame segmentation masks |
 | Scene assembly | `run_scene_assembly.py` | Unified per-frame JSONL |
 | Explanation | Nemotron Super 49B | System commentary per phase transition |
 | 3D Workflow Space | `phase_space_3d.py` | Semantic 3D point cloud + trajectory |
@@ -95,10 +95,11 @@ This produces:
 |---|---|
 | Inference | PyTorch + CUDA (RTX 5060 Ti) |
 | Phase recognition | ResNet50 trained with `torchvision` |
-| Instrument detection | YOLO11x (Ultralytics) |
+| Instrument detection | YOLOv8s (Ultralytics, CUDA) |
 | Natural language reasoning | **NVIDIA Nemotron Super 49B** via NIM API |
 | Post-hoc Q&A | Nemotron chat completions |
 | Case report generation | Nemotron structured generation |
+| Multi-surgery comparison | Nemotron comparative analysis |
 
 ---
 
@@ -131,14 +132,14 @@ python scripts/run_detection.py --video video49
 # 3. Run phase recognition
 python scripts/run_phase_recognition.py --video video49
 
-# 4. Run segmentation
-python scripts/run_segmentation.py --video video49
-
-# 5. Assemble scene JSONL
+# 4. Assemble scene JSONL
 python scripts/run_scene_assembly.py --video video49
 
-# 6. Generate explanations (Nemotron)
+# 5. Generate explanations (Nemotron)
 python scripts/run_explanation.py --video video49
+
+# 6. Build 3D workflow space
+python scripts/run_phase_space.py --video video49
 
 # 7. Record annotated overlay video
 python scripts/run_dashboard.py --video video49
@@ -175,12 +176,11 @@ python scripts/run_phase_space.py --video video49
 ```
 OpenSurgAI/
   src/
-    detection/      # YOLO11x instrument detection
+    detection/      # YOLOv8s instrument detection
     phase/          # ResNet50 phase recognition
-    segmentation/   # Anatomy segmentation
     scene/          # Scene assembly (JSONL)
     explanation/    # Nemotron explanation pipeline
-    analysis/       # 3D Semantic Workflow Space
+    analysis/       # 3D Semantic Workflow Space + multi-surgery comparison
     dashboard/      # Overlay renderer + video recorder
     video.py        # Video I/O utilities
   scripts/
@@ -190,7 +190,6 @@ OpenSurgAI/
     run_phase_space.py      # 3D visualisation (HTML export)
     run_detection.py        # Instrument detection
     run_phase_recognition.py # Phase recognition
-    run_segmentation.py     # Anatomy segmentation
     run_scene_assembly.py   # Scene JSONL assembly
     run_explanation.py      # Nemotron explanation generation
     run_dashboard.py        # Annotated video recorder
