@@ -1,8 +1,13 @@
-"""Instrument detection pipeline using YOLOv8.
+"""Instrument detection pipeline.
 
-Loads a pretrained YOLOv8 model, runs GPU inference on surgical videos,
-and outputs per-frame instrument bounding boxes with class labels and
-confidence scores.  Designed for ≥30 FPS throughput on RTX 5060 Ti.
+Two modes:
+1. **YOLOv8** (legacy) — generic object detection with bounding boxes.
+2. **ResNet50 tool classifier** (Cholec80-trained) — multi-label surgical
+   instrument presence classification fine-tuned on Cholec80 tool
+   annotations.  No bounding boxes, but proper surgical instrument labels.
+
+Both pipelines output the same JSONL format so downstream scene assembly
+works unchanged.
 
 Output format (JSON Lines – one JSON object per line):
     {
@@ -246,6 +251,190 @@ class DetectionPipeline:
         Returns a summary dict with frame count, detection count, and
         throughput FPS.
         """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        total_frames = 0
+        total_detections = 0
+        t0 = time.perf_counter()
+
+        with open(output_path, "w") as fh:
+            for result in self.process_video(video_path, video_id, stride):
+                fh.write(result.to_json() + "\n")
+                total_frames += 1
+                total_detections += len(result.detections)
+
+        elapsed = time.perf_counter() - t0
+        summary = {
+            "video_id": video_id or Path(video_path).stem,
+            "total_frames": total_frames,
+            "total_detections": total_detections,
+            "elapsed_sec": round(elapsed, 2),
+            "throughput_fps": round(total_frames / elapsed, 1) if elapsed > 0 else 0,
+        }
+        log.info("Saved %s  (%s)", output_path, summary)
+        return summary
+
+
+# ── ResNet50 tool classifier pipeline ────────────────────────────────
+
+class ToolClassifierPipeline:
+    """Multi-label surgical instrument presence classifier.
+
+    Uses a ResNet50 fine-tuned on Cholec80 tool annotations to predict
+    which of the 7 surgical instruments are present in each frame.
+    Outputs the same JSONL format as :class:`DetectionPipeline` for
+    backward compatibility with scene assembly.
+
+    Parameters
+    ----------
+    model_weights : str | Path
+        Path to a trained ``.pt`` checkpoint from ``train_tool.py``.
+    device : str | None
+        PyTorch device string.  ``None`` auto-selects CUDA.
+    threshold : float
+        Sigmoid threshold for tool presence (default 0.5).
+    half : bool
+        Use FP16 inference.
+    batch_size : int
+        Frames per forward pass.
+    img_size : int
+        Input image size (centre-cropped square).
+    """
+
+    def __init__(
+        self,
+        model_weights: str | Path,
+        device: str | None = None,
+        threshold: float = 0.5,
+        half: bool = True,
+        batch_size: int = 32,
+        img_size: int = 224,
+    ) -> None:
+        from torchvision import models
+        from torchvision.models import ResNet50_Weights
+
+        self.threshold = threshold
+        self.half = half
+        self.batch_size = batch_size
+        self.img_size = img_size
+
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device
+        if self.half and self.device == "cpu":
+            log.warning("FP16 not supported on CPU – falling back to FP32.")
+            self.half = False
+
+        # Build model
+        log.info("Loading tool classifier: %s  (device=%s)", model_weights, self.device)
+        backbone = models.resnet50(weights=ResNet50_Weights.DEFAULT)
+        in_features = backbone.fc.in_features
+        backbone.fc = torch.nn.Linear(in_features, len(CHOLEC80_INSTRUMENTS))
+
+        state = torch.load(str(model_weights), map_location="cpu")
+        if isinstance(state, dict) and "model_state_dict" in state:
+            state = state["model_state_dict"]
+        backbone.load_state_dict(state)
+
+        self.model = backbone.to(self.device)
+        self.model.eval()
+        if self.half:
+            self.model.half()
+        log.info("Tool classifier ready – %d instruments, threshold=%.2f",
+                 len(CHOLEC80_INSTRUMENTS), self.threshold)
+
+    def _preprocess(self, bgr_frames: list[np.ndarray]) -> torch.Tensor:
+        """BGR frames -> normalised (N, 3, img_size, img_size) tensor."""
+        import cv2 as _cv2
+        tensors = []
+        for bgr in bgr_frames:
+            rgb = _cv2.cvtColor(bgr, _cv2.COLOR_BGR2RGB)
+            h, w = rgb.shape[:2]
+            scale = (self.img_size + 32) / min(h, w)
+            rgb = _cv2.resize(rgb, (int(w * scale), int(h * scale)))
+            nh, nw = rgb.shape[:2]
+            y0, x0 = (nh - self.img_size) // 2, (nw - self.img_size) // 2
+            rgb = rgb[y0:y0 + self.img_size, x0:x0 + self.img_size]
+            t = torch.from_numpy(rgb).permute(2, 0, 1).float() / 255.0
+            t = (t - torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)) / \
+                torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+            tensors.append(t)
+        batch = torch.stack(tensors).to(self.device)
+        if self.half:
+            batch = batch.half()
+        return batch
+
+    @torch.inference_mode()
+    def _predict_batch(self, bgr_frames: list[np.ndarray]) -> list[list[Detection]]:
+        """Classify tool presence for a batch of frames."""
+        batch = self._preprocess(bgr_frames)
+        logits = self.model(batch)
+        probs = torch.sigmoid(logits.float())  # (N, 7)
+
+        results = []
+        for i in range(probs.size(0)):
+            dets = []
+            for tool_id in range(len(CHOLEC80_INSTRUMENTS)):
+                conf = probs[i, tool_id].item()
+                if conf >= self.threshold:
+                    dets.append(Detection(
+                        bbox=[0.0, 0.0, 0.0, 0.0],
+                        class_id=tool_id,
+                        class_name=CHOLEC80_INSTRUMENTS[tool_id],
+                        confidence=conf,
+                    ))
+            results.append(dets)
+        return results
+
+    def process_video(
+        self,
+        video_path: Path,
+        video_id: str | None = None,
+        stride: int = 1,
+    ) -> Iterator[FrameResult]:
+        """Run tool classification on every (strided) frame."""
+        video_path = Path(video_path)
+        if video_id is None:
+            video_id = video_path.stem
+
+        with VideoReader(video_path, stride=stride) as reader:
+            log.info(
+                "Tool-classifying %s  (%dx%d, %.1f fps, ~%d frames, stride=%d)",
+                video_id, reader.width, reader.height,
+                reader.fps, reader.frame_count, stride,
+            )
+            t0 = time.perf_counter()
+            frames_processed = 0
+
+            for batch in reader.batched_frames(self.batch_size):
+                indices, timestamps, bgr_frames = zip(*batch)
+                dets_per_frame = self._predict_batch(list(bgr_frames))
+
+                for idx, ts, dets in zip(indices, timestamps, dets_per_frame):
+                    frames_processed += 1
+                    yield FrameResult(
+                        video_id=video_id,
+                        frame_idx=idx,
+                        timestamp_sec=ts,
+                        detections=dets,
+                    )
+
+            elapsed = time.perf_counter() - t0
+            fps_actual = frames_processed / elapsed if elapsed > 0 else 0
+            log.info(
+                "Finished %s – %d frames in %.1fs  (%.1f FPS)",
+                video_id, frames_processed, elapsed, fps_actual,
+            )
+
+    def process_video_to_jsonl(
+        self,
+        video_path: Path,
+        output_path: Path,
+        video_id: str | None = None,
+        stride: int = 1,
+    ) -> dict:
+        """Process a video and write results to JSONL."""
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 

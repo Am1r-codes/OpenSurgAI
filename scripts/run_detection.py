@@ -34,7 +34,7 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from src.detection.pipeline import DetectionPipeline  # noqa: E402
+from src.detection.pipeline import DetectionPipeline, ToolClassifierPipeline  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -114,6 +114,12 @@ def parse_args() -> argparse.Namespace:
         "--model", type=str, default="yolov8s.pt",
         help="YOLO weights file or Ultralytics model name (default: yolov8s.pt)",
     )
+    p.add_argument(
+        "--model-weights", type=str, default=None,
+        help="Path to trained ResNet50 tool classifier weights (.pt). "
+             "When provided, uses the Cholec80-trained tool classifier "
+             "instead of YOLO.",
+    )
     p.add_argument("--device", type=str, default=None, help="PyTorch device (default: auto)")
     p.add_argument("--conf", type=float, default=0.25, help="Confidence threshold (default: 0.25)")
     p.add_argument("--iou", type=float, default=0.45, help="NMS IoU threshold (default: 0.45)")
@@ -136,19 +142,33 @@ def main() -> None:
     videos = collect_videos(args)
 
     log.info("Videos to process: %d", len(videos))
-    log.info("Model : %s", args.model)
     log.info("Device: %s", args.device or "auto")
     log.info("Output: %s", args.output_dir)
 
-    pipeline = DetectionPipeline(
-        model_path=args.model,
-        device=args.device,
-        conf_threshold=args.conf,
-        iou_threshold=args.iou,
-        img_size=args.img_size,
-        half=args.half,
-        batch_size=args.batch_size,
-    )
+    use_tool_classifier = args.model_weights is not None
+
+    if use_tool_classifier:
+        log.info("Mode: ResNet50 tool classifier (Cholec80-trained)")
+        log.info("Weights: %s", args.model_weights)
+        pipeline = ToolClassifierPipeline(
+            model_weights=args.model_weights,
+            device=args.device,
+            threshold=args.conf,
+            half=args.half,
+            batch_size=args.batch_size,
+        )
+    else:
+        log.info("Mode: YOLOv8 generic detection")
+        log.info("Model: %s", args.model)
+        pipeline = DetectionPipeline(
+            model_path=args.model,
+            device=args.device,
+            conf_threshold=args.conf,
+            iou_threshold=args.iou,
+            img_size=args.img_size,
+            half=args.half,
+            batch_size=args.batch_size,
+        )
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -173,22 +193,40 @@ def main() -> None:
     total_dets = sum(s["total_detections"] for s in all_summaries)
 
     # ── write run summary ─────────────────────────────────────────────
-    run_summary = {
-        "model": args.model,
-        "device": pipeline.device,
-        "half": pipeline.half,
-        "batch_size": pipeline.batch_size,
-        "img_size": pipeline.img_size,
-        "conf_threshold": pipeline.conf_threshold,
-        "iou_threshold": pipeline.iou_threshold,
-        "stride": args.stride,
-        "num_videos": len(videos),
-        "total_frames": total_frames,
-        "total_detections": total_dets,
-        "total_elapsed_sec": round(total_elapsed, 2),
-        "overall_fps": round(total_frames / total_elapsed, 1) if total_elapsed > 0 else 0,
-        "per_video": all_summaries,
-    }
+    if use_tool_classifier:
+        run_summary = {
+            "mode": "tool_classifier",
+            "model_weights": args.model_weights,
+            "device": pipeline.device,
+            "half": pipeline.half,
+            "batch_size": pipeline.batch_size,
+            "threshold": pipeline.threshold,
+            "stride": args.stride,
+            "num_videos": len(videos),
+            "total_frames": total_frames,
+            "total_detections": total_dets,
+            "total_elapsed_sec": round(total_elapsed, 2),
+            "overall_fps": round(total_frames / total_elapsed, 1) if total_elapsed > 0 else 0,
+            "per_video": all_summaries,
+        }
+    else:
+        run_summary = {
+            "mode": "yolo",
+            "model": args.model,
+            "device": pipeline.device,
+            "half": pipeline.half,
+            "batch_size": pipeline.batch_size,
+            "img_size": pipeline.img_size,
+            "conf_threshold": pipeline.conf_threshold,
+            "iou_threshold": pipeline.iou_threshold,
+            "stride": args.stride,
+            "num_videos": len(videos),
+            "total_frames": total_frames,
+            "total_detections": total_dets,
+            "total_elapsed_sec": round(total_elapsed, 2),
+            "overall_fps": round(total_frames / total_elapsed, 1) if total_elapsed > 0 else 0,
+            "per_video": all_summaries,
+        }
     summary_path = output_dir / "run_summary.json"
     summary_path.write_text(json.dumps(run_summary, indent=2))
 

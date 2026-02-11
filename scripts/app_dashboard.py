@@ -294,11 +294,17 @@ _PYTHON = str(Path(sys.executable))
 
 def _run_pipeline(video_path: Path, video_id: str, api_key: str | None) -> None:
     """Run the full analysis pipeline on an uploaded video."""
+    # Use tool classifier if weights exist, otherwise fall back to YOLO
+    tool_weights = _PROJECT_ROOT / "weights" / "tool_resnet50.pt"
+    det_cmd = [
+        _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_detection.py"),
+        "--video", str(video_path),
+    ]
+    if tool_weights.exists():
+        det_cmd += ["--model-weights", str(tool_weights)]
+
     steps = [
-        ("Detection", [
-            _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_detection.py"),
-            "--video", str(video_path),
-        ]),
+        ("Detection", det_cmd),
         ("Phase Recognition", [
             _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_phase_recognition.py"),
             "--video", str(video_path),
