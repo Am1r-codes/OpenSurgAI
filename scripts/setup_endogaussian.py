@@ -69,37 +69,39 @@ def main():
             return
 
     # Create directory structure
-    print("\n📁 Creating directory structure...")
+    print("\n[*] Creating directory structure...")
     external_dir = project_root / "external"
     external_dir.mkdir(exist_ok=True)
     os.chdir(external_dir)
 
     # Clone EndoGaussian
-    print("\n📥 Cloning EndoGaussian repository...")
+    print("\n[*] Cloning EndoGaussian repository...")
     if not (external_dir / "EndoGaussian").exists():
         run_command(
             "git clone https://github.com/CUHK-AIM-Group/EndoGaussian.git",
-            "Clone EndoGaussian from GitHub"
+            "Clone EndoGaussian from GitHub",
+            auto_yes=args.yes
         )
     else:
-        print("✓ EndoGaussian directory already exists, skipping clone")
+        print("[+] EndoGaussian directory already exists, skipping clone")
 
     os.chdir(external_dir / "EndoGaussian")
 
     # Check if conda is available
-    print("\n🐍 Checking conda...")
-    conda_check = run_command("conda --version", "Check conda", check=False)
+    print("\n[*] Checking conda...")
+    conda_check = run_command("conda --version", "Check conda", check=False, auto_yes=args.yes)
     if conda_check.returncode != 0:
-        print("❌ Conda not found! Please install Miniconda or Anaconda first.")
+        print("[!] Conda not found! Please install Miniconda or Anaconda first.")
         print("   Download from: https://docs.conda.io/en/latest/miniconda.html")
         return
 
     # Create conda environment
-    print("\n🌟 Creating conda environment 'endogaussian'...")
+    print("\n[*] Creating conda environment 'endogaussian'...")
     run_command(
         "conda create -n endogaussian python=3.7 -y",
         "Create conda environment",
-        check=False  # May already exist
+        check=False,  # May already exist
+        auto_yes=args.yes
     )
 
     # Detect conda activation command
@@ -110,17 +112,18 @@ def main():
     else:
         activate_cmd = "conda activate endogaussian"
 
-    print(f"\n📦 Installing PyTorch 1.13.1 with CUDA 11.7...")
+    print(f"\n[*] Installing PyTorch 1.13.1 with CUDA 11.7...")
     print("   (This may take 5-10 minutes...)")
 
     # Install PyTorch - using pip for better Windows compatibility
     run_command(
         f"{activate_cmd} && pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117",
-        "Install PyTorch with CUDA 11.7"
+        "Install PyTorch with CUDA 11.7",
+        auto_yes=args.yes
     )
 
     # Install basic dependencies
-    print("\n📦 Installing core dependencies...")
+    print("\n[*] Installing core dependencies...")
     dependencies = [
         "tqdm",
         "plyfile",
@@ -134,29 +137,32 @@ def main():
 
     run_command(
         f"{activate_cmd} && pip install {' '.join(dependencies)}",
-        "Install core dependencies"
+        "Install core dependencies",
+        auto_yes=args.yes
     )
 
     # Install pytorch3d
-    print("\n🎨 Installing PyTorch3D...")
+    print("\n[*] Installing PyTorch3D...")
     print("   (This is the big one - may take 10-15 minutes...)")
 
     # First try conda
     pt3d_result = run_command(
         f"{activate_cmd} && conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y",
         "Install PyTorch3D dependencies",
-        check=False
+        check=False,
+        auto_yes=args.yes
     )
 
     # Then install pytorch3d from source
     run_command(
         f"{activate_cmd} && pip install 'git+https://github.com/facebookresearch/pytorch3d.git@stable'",
         "Install PyTorch3D from GitHub",
-        check=False
+        check=False,
+        auto_yes=args.yes
     )
 
     # Install Gaussian rasterization submodules
-    print("\n⚡ Building Gaussian rasterization CUDA extensions...")
+    print("\n[*] Building Gaussian rasterization CUDA extensions...")
     print("   (This compiles C++/CUDA code - may take 5-10 minutes...)")
 
     submodules_dir = Path("submodules")
@@ -166,7 +172,8 @@ def main():
             os.chdir(submodules_dir / "diff-gaussian-rasterization")
             run_command(
                 f"{activate_cmd} && pip install .",
-                "Build diff-gaussian-rasterization CUDA extension"
+                "Build diff-gaussian-rasterization CUDA extension",
+                auto_yes=args.yes
             )
             os.chdir(external_dir / "EndoGaussian")
 
@@ -175,13 +182,14 @@ def main():
             os.chdir(submodules_dir / "simple-knn")
             run_command(
                 f"{activate_cmd} && pip install .",
-                "Build simple-knn CUDA extension"
+                "Build simple-knn CUDA extension",
+                auto_yes=args.yes
             )
             os.chdir(external_dir / "EndoGaussian")
     else:
-        print("⚠️  WARNING: submodules directory not found!")
+        print("[!] WARNING: submodules directory not found!")
         print("   The repo may need submodule initialization:")
-        run_command("git submodule update --init --recursive", "Initialize submodules")
+        run_command("git submodule update --init --recursive", "Initialize submodules", auto_yes=args.yes)
         print("   Please re-run this script after submodules are initialized.")
 
     print("""
