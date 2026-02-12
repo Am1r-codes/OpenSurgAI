@@ -38,12 +38,12 @@ def print_header(text: str):
 
 def check_pass(message: str):
     """Print success message."""
-    print(f"{Colors.GREEN}[✓]{Colors.RESET} {message}")
+    print(f"{Colors.GREEN}[+]{Colors.RESET} {message}")
 
 
 def check_fail(message: str, hint: str = ""):
     """Print failure message with optional hint."""
-    print(f"{Colors.RED}[✗]{Colors.RESET} {message}")
+    print(f"{Colors.RED}[X]{Colors.RESET} {message}")
     if hint:
         print(f"    {Colors.YELLOW}Hint: {hint}{Colors.RESET}")
 
@@ -286,7 +286,7 @@ def main():
     if all_checks_passed:
         print(f"""
 {Colors.GREEN}{Colors.BOLD}
-    ✓ ALL CRITICAL CHECKS PASSED!
+    [+] ALL CRITICAL CHECKS PASSED!
 {Colors.RESET}
     Your OpenSurgAI setup is ready for the GTC 2026 demo!
 
@@ -294,19 +294,19 @@ def main():
     1. Run full demo: python scripts/run_full_demo.py --video video49
     2. Or launch dashboard: streamlit run scripts/app_dashboard.py
 
-    Good luck with your submission! 🚀
+    Good luck with your submission!
         """)
         return 0
     else:
         print(f"""
 {Colors.RED}{Colors.BOLD}
-    ✗ SOME CHECKS FAILED
+    [X] SOME CHECKS FAILED
 {Colors.RESET}
     Please fix the issues above before running the demo.
 
     Common fixes:
     - Install dependencies: pip install -r requirements.txt
-    - Install EndoGaussian: python scripts/setup_endogaussian.py --yes
+    - Install EndoGaussian: scripts\setup_endogaussian.bat (Windows)
     - Export TensorRT model: python scripts/export_tensorrt.py
     - Download Cholec80 videos to data/cholec80/videos/
         """)

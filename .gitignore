@@ -22,3 +22,5 @@ Thumbs.db
 .vscode/
 .claude/
 external/EndoGaussian/
+nul
+NUL
