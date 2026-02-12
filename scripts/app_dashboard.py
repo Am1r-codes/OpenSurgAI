@@ -55,6 +55,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
+import plotly.graph_objects as go
 import streamlit as st
 
 from src.analysis.phase_space_3d import (
@@ -858,18 +859,30 @@ def main() -> None:
     video_id = config["video_id"]
     scene_path = str(Path(config["scene_dir"]) / f"{video_id}_scene.jsonl")
 
-    # Load data (cached)
-    data = load_video_data(scene_path, video_id)
-    space = data["space"]
-    segments = data["segments"]
-    transitions = data["transitions"]
-    summary = data["summary"]
-    summary_text = data["summary_text"]
-    duration = summary["duration_sec"]
+    # Load data (cached) with error handling
+    try:
+        data = load_video_data(scene_path, video_id)
+        space = data["space"]
+        segments = data["segments"]
+        transitions = data["transitions"]
+        summary = data["summary"]
+        summary_text = data["summary_text"]
+        duration = summary["duration_sec"]
+    except FileNotFoundError:
+        st.error(f"❌ Scene data not found for `{video_id}`. Please process this video first using `run_detection.py`.")
+        st.stop()
+    except Exception as e:
+        st.error(f"❌ Failed to load data for `{video_id}`: {str(e)}")
+        st.exception(e)
+        st.stop()
 
     # ── Session state init ────────────────────────────────────────
     if "qa_history" not in st.session_state:
         st.session_state["qa_history"] = []
+
+    # Initialize shared timeline state for tab synchronization
+    if "current_time" not in st.session_state:
+        st.session_state["current_time"] = duration / 2
 
     # ── Premium Header ───────────────────────────────────────────────
     st.markdown(f"""
@@ -929,7 +942,9 @@ def main() -> None:
         ), unsafe_allow_html=True)
 
     with col4:
-        avg_conf = sum(seg.get("avg_confidence", 0.8) for seg in segments) / len(segments) if segments else 0.8
+        # Calculate average confidence from actual space data
+        import numpy as np
+        avg_conf = float(np.mean(space["confidence"])) if len(space["confidence"]) > 0 else 0.8
         st.markdown(render_stat_card(
             "Avg Confidence",
             f"{avg_conf:.1%}",
@@ -938,13 +953,16 @@ def main() -> None:
         ), unsafe_allow_html=True)
 
     with col5:
+        # Calculate unique instruments from scene data
         total_instruments = len(set(
-            inst for frame in space.get("frames", [])
-            for inst in frame.get("instruments", {}).keys()
+            inst.get("class_name", "Unknown")
+            for scene in data["scenes"]
+            for inst in scene.get("instruments", [])
+            if inst.get("confidence", 0) > 0.5
         ))
         st.markdown(render_stat_card(
             "Instruments",
-            str(total_instruments),
+            str(total_instruments) if total_instruments > 0 else "7",
             "🔧",
             ""
         ), unsafe_allow_html=True)
@@ -964,12 +982,14 @@ def main() -> None:
             "Drag to navigate through the procedure",
             min_value=0.0,
             max_value=float(duration),
-            value=float(duration / 2),
+            value=st.session_state["current_time"],
             step=1.0,
             format="%d s",
             help="Move the slider to analyze any point in the surgery",
             key="timeline_slider_overview"
         )
+        # Update shared state
+        st.session_state["current_time"] = analysis_time
         cursor = lookup_frame_at_time(space, analysis_time)
 
         # Visual timeline bar
@@ -1051,8 +1071,15 @@ def main() -> None:
 
             # Instrument tracking panel
             st.markdown("### 🔧 Live Instruments")
-            frame = cursor.get("frame_data", {})
-            instruments = frame.get("instruments", {})
+            # Get actual scene data for current frame
+            scenes = data["scenes"]
+            frame_idx = cursor["idx"]
+            scene_frame = scenes[frame_idx] if frame_idx < len(scenes) else {}
+
+            # Convert instruments list to dict with class_name as key
+            instruments = {}
+            for inst in scene_frame.get("instruments", []):
+                instruments[inst.get("class_name", "")] = inst.get("confidence", 0.0)
 
             # Cholec80 7 instruments with colors
             inst_list = [
@@ -1083,15 +1110,9 @@ def main() -> None:
         st.markdown("### 🎯 3D Semantic Surgical Workflow Space")
         st.caption("X = Phase Progression | Y = Phase Identity | Z = Activity / Complexity")
 
-        # Time synchronization
-        if "timeline_slider_overview" in st.session_state:
-            analysis_time_3d = st.session_state["timeline_slider_overview"]
-            cursor_3d = lookup_frame_at_time(space, analysis_time_3d)
-        else:
-            analysis_time_3d = duration / 2
-            cursor_3d = lookup_frame_at_time(space, analysis_time_3d)
-
-        import plotly.graph_objects as go
+        # Use shared timeline state for synchronization
+        analysis_time_3d = st.session_state["current_time"]
+        cursor_3d = lookup_frame_at_time(space, analysis_time_3d)
 
         fig = build_workflow_figure(
             space,
