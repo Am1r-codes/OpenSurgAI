@@ -314,7 +314,14 @@ st.markdown("""
     /* === HIDE STREAMLIT BRANDING === */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* Keep header visible for sidebar toggle button */
+    header[data-testid="stHeader"] {
+        background-color: transparent;
+    }
+    /* Hide only the Streamlit toolbar items, keep hamburger menu */
+    header[data-testid="stHeader"] > div:first-child {
+        background-color: rgba(10, 17, 32, 0.95);
+    }
 
     /* === CUSTOM PROGRESS RING === */
     .progress-ring {
@@ -787,7 +794,9 @@ def render_sidebar() -> dict:
         st.sidebar.error(f"No scene files found in: {scene_dir}")
         st.stop()
 
-    video_id = st.sidebar.selectbox("Video", videos)
+    # Default to video49 if available, otherwise first video
+    default_idx = videos.index("video49") if "video49" in videos else 0
+    video_id = st.sidebar.selectbox("Video", videos, index=default_idx)
 
     st.sidebar.divider()
 
