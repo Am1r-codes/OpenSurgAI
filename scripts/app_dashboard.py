@@ -375,6 +375,9 @@ def render_circular_progress(percent: float, size: int = 120, label: str = "") -
     circumference = 2 * 3.14159 * radius
     offset = circumference * (1 - percent)
 
+    # Use round() instead of int() for consistent rounding
+    display_percent = round(percent * 100)
+
     return f"""
     <div style="display: inline-block; text-align: center;">
         <svg width="{size}" height="{size}" class="progress-ring">
@@ -404,7 +407,7 @@ def render_circular_progress(percent: float, size: int = 120, label: str = "") -
                 text-anchor="middle"
                 style="font-size: 24px; font-weight: 700; fill: #00CED1;"
             >
-                {int(percent * 100)}%
+                {display_percent}%
             </text>
         </svg>
         <div style="margin-top: 8px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px;">
@@ -441,10 +444,10 @@ def render_instrument_bar(name: str, confidence: float, color: str, active: bool
 
 def render_phase_timeline_bar(segments: list, current_time: float, duration: float) -> str:
     """Render a visual phase timeline with current position marker."""
-    html_parts = ['<div style="position: relative; width: 100%; height: 40px; margin: 16px 0;">']
+    html_parts = ['<div style="position: relative; width: 100%; height: 30px; margin: 16px 0;">']
 
     # Background bar
-    html_parts.append('<div style="position: absolute; width: 100%; height: 20px; top: 10px; background-color: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden; display: flex;">')
+    html_parts.append('<div style="position: absolute; width: 100%; height: 20px; top: 5px; background-color: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden; display: flex;">')
 
     # Phase segments
     for seg in segments:
@@ -452,27 +455,13 @@ def render_phase_timeline_bar(segments: list, current_time: float, duration: flo
         width_pct = (seg["duration"] / duration) * 100
         color = PHASE_COLOURS[seg["phase_idx"] % len(PHASE_COLOURS)]
 
-        html_parts.append(f'''
-        <div style="position: absolute; left: {start_pct}%; width: {width_pct}%; height: 100%;
-                    background-color: {color}; opacity: 0.8; border-right: 1px solid #0A1120;"
-             title="{seg['phase_name']} ({seg['duration']:.0f}s)">
-        </div>
-        ''')
+        html_parts.append(f'<div style="position: absolute; left: {start_pct}%; width: {width_pct}%; height: 100%; background-color: {color}; opacity: 0.8; border-right: 1px solid #0A1120;" title="{seg["phase_name"]} ({seg["duration"]:.0f}s)"></div>')
 
     html_parts.append('</div>')
 
-    # Current position marker
+    # Current position marker (simplified - no nested triangle)
     current_pct = (current_time / duration) * 100
-    html_parts.append(f'''
-    <div style="position: absolute; left: {current_pct}%; top: 0; width: 3px; height: 40px;
-                background: linear-gradient(180deg, #00CED1 0%, #00FFFF 100%);
-                box-shadow: 0 0 12px rgba(0, 206, 209, 0.8); z-index: 10; border-radius: 2px;">
-        <div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
-                    width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent;
-                    border-top: 8px solid #00CED1;">
-        </div>
-    </div>
-    ''')
+    html_parts.append(f'<div style="position: absolute; left: {current_pct}%; top: 0; width: 4px; height: 30px; background: linear-gradient(180deg, #00CED1 0%, #00FFFF 100%); box-shadow: 0 0 12px rgba(0, 206, 209, 0.8); z-index: 10; border-radius: 2px;"></div>')
 
     html_parts.append('</div>')
     return ''.join(html_parts)
@@ -1009,10 +998,11 @@ def main() -> None:
             raw_video = Path(config["video_dir"]) / f"{video_id}.mp4"
 
             if annotated_video.exists():
-                st.video(str(annotated_video), autoplay=True)
-                st.caption("✅ Pre-rendered HUD overlay with instrument tracking")
+                # Display video at full width for better quality
+                st.video(str(annotated_video), format="video/mp4", start_time=0)
+                st.caption("✅ Pre-rendered HUD overlay with instrument tracking · 1080p quality")
             elif raw_video.exists():
-                st.video(str(raw_video), autoplay=True)
+                st.video(str(raw_video), format="video/mp4", start_time=0)
                 st.warning("⚠️ Raw video — run recorder for HUD overlay")
             else:
                 st.error(f"❌ No video found for `{video_id}`")
@@ -1037,11 +1027,11 @@ def main() -> None:
                 <div style="display: flex; justify-content: space-between; margin-top: 16px;">
                     <div>
                         <div style="font-size: 10px; color: #666;">Progress</div>
-                        <div style="font-size: 18px; color: #00CED1; font-weight: 700;">{cursor['phase_progress']:.0%}</div>
+                        <div style="font-size: 18px; color: #00CED1; font-weight: 700;">{round(cursor['phase_progress'] * 100)}%</div>
                     </div>
                     <div>
                         <div style="font-size: 10px; color: #666;">Confidence</div>
-                        <div style="font-size: 18px; color: #00CED1; font-weight: 700;">{cursor['confidence']:.0%}</div>
+                        <div style="font-size: 18px; color: #00CED1; font-weight: 700;">{round(cursor['confidence'] * 100)}%</div>
                     </div>
                     <div>
                         <div style="font-size: 10px; color: #666;">Activity</div>
