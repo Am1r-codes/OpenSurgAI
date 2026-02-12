@@ -104,20 +104,21 @@ def main():
         auto_yes=args.yes
     )
 
-    # Detect conda activation command
-    conda_exe = "conda"
-    if sys.platform == "win32":
-        conda_base = Path(os.environ.get("CONDA_PREFIX", "")).parent
-        activate_cmd = f'"{conda_base / "Scripts" / "activate.bat"}" endogaussian'
-    else:
-        activate_cmd = "conda activate endogaussian"
+    # Use conda run to execute commands in the environment
+    # This works from any shell without activation
+    def conda_run(cmd: str) -> str:
+        """Wrap command to run in conda environment."""
+        return f'conda run -n endogaussian {cmd}'
 
     print(f"\n[*] Installing PyTorch 1.13.1 with CUDA 11.7...")
     print("   (This may take 5-10 minutes...)")
+    print("   NOTE: On Windows, installation may be faster using the batch script:")
+    print("         scripts/setup_endogaussian.bat")
+    print()
 
     # Install PyTorch - using pip for better Windows compatibility
     run_command(
-        f"{activate_cmd} && pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117",
+        conda_run('pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117'),
         "Install PyTorch with CUDA 11.7",
         auto_yes=args.yes
     )
@@ -136,7 +137,7 @@ def main():
     ]
 
     run_command(
-        f"{activate_cmd} && pip install {' '.join(dependencies)}",
+        conda_run(f'pip install {" ".join(dependencies)}'),
         "Install core dependencies",
         auto_yes=args.yes
     )
@@ -145,9 +146,9 @@ def main():
     print("\n[*] Installing PyTorch3D...")
     print("   (This is the big one - may take 10-15 minutes...)")
 
-    # First try conda
+    # First install dependencies
     pt3d_result = run_command(
-        f"{activate_cmd} && conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y",
+        conda_run('conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y'),
         "Install PyTorch3D dependencies",
         check=False,
         auto_yes=args.yes
@@ -155,7 +156,7 @@ def main():
 
     # Then install pytorch3d from source
     run_command(
-        f"{activate_cmd} && pip install 'git+https://github.com/facebookresearch/pytorch3d.git@stable'",
+        conda_run('pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"'),
         "Install PyTorch3D from GitHub",
         check=False,
         auto_yes=args.yes
@@ -171,7 +172,7 @@ def main():
         if (submodules_dir / "diff-gaussian-rasterization").exists():
             os.chdir(submodules_dir / "diff-gaussian-rasterization")
             run_command(
-                f"{activate_cmd} && pip install .",
+                conda_run('pip install .'),
                 "Build diff-gaussian-rasterization CUDA extension",
                 auto_yes=args.yes
             )
@@ -181,7 +182,7 @@ def main():
         if (submodules_dir / "simple-knn").exists():
             os.chdir(submodules_dir / "simple-knn")
             run_command(
-                f"{activate_cmd} && pip install .",
+                conda_run('pip install .'),
                 "Build simple-knn CUDA extension",
                 auto_yes=args.yes
             )
