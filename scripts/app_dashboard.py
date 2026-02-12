@@ -405,6 +405,7 @@ def render_circular_progress(percent: float, size: int = 120, label: str = "") -
                 x="{size/2}"
                 y="{size/2 + 8}"
                 text-anchor="middle"
+                transform="rotate(90 {size/2} {size/2})"
                 style="font-size: 24px; font-weight: 700; fill: #00CED1;"
             >
                 {display_percent}%
