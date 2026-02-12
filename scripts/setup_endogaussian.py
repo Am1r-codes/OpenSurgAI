@@ -32,7 +32,7 @@ def run_command(cmd, description="", check=True):
 
 def main():
     print("""
-    🔥🔥🔥 ENDOGAUSSIAN INSTALLATION 🔥🔥🔥
+    === ENDOGAUSSIAN INSTALLATION ===
     ========================================
 
     This will install EndoGaussian for real-time 3D surgical reconstruction!
@@ -42,8 +42,8 @@ def main():
     - Conda or Miniconda
     - ~10GB disk space
 
-    Training time: 2 MINUTES per video! 🚀
-    Rendering: 195 FPS real-time! ⚡
+    Training time: 2 MINUTES per video!
+    Rendering: 195 FPS real-time!
     """)
 
     if not input("Ready to start? (y/n): ").lower().startswith('y'):
@@ -181,13 +181,13 @@ def main():
 
     print("""
 
-    ✅✅✅ INSTALLATION COMPLETE! ✅✅✅
+    === INSTALLATION COMPLETE! ===
     ===================================
 
-    🎉 EndoGaussian is ready to rock!
+    EndoGaussian is ready to rock!
 
-    📍 Next Steps:
-    ─────────────
+    Next Steps:
+    -----------
 
     1. Activate the environment:
        conda activate endogaussian
@@ -201,15 +201,15 @@ def main():
     4. Render 3D scene (real-time at 195 FPS!):
        python render.py --model output/video49
 
-    🚀 FEATURES:
-    ────────────
-    ✓ Photorealistic 3D reconstruction
-    ✓ Real-time rendering (195 FPS)
-    ✓ 2-minute training time
-    ✓ Click-to-explore interactivity
-    ✓ Deformable tissue handling
+    FEATURES:
+    ---------
+    * Photorealistic 3D reconstruction
+    * Real-time rendering (195 FPS)
+    * 2-minute training time
+    * Click-to-explore interactivity
+    * Deformable tissue handling
 
-    LET'S GOOOO! 🔥🔥🔥
+    LET'S GO!!!
     """)
 
 if __name__ == "__main__":
