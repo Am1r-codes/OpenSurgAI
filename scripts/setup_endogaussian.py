@@ -4,15 +4,16 @@
 Automates the complete installation of EndoGaussian for 3D surgical scene reconstruction.
 """
 
+import argparse
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-def run_command(cmd, description="", check=True):
+def run_command(cmd, description="", check=True, auto_yes=False):
     """Run a shell command with nice output."""
     print(f"\n{'='*60}")
-    print(f"🔧 {description if description else cmd}")
+    print(f" {description if description else cmd}")
     print(f"{'='*60}")
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -23,14 +24,18 @@ def run_command(cmd, description="", check=True):
         print(result.stderr)
 
     if check and result.returncode != 0:
-        print(f"❌ FAILED: {description}")
+        print(f"FAILED: {description}")
         print(f"Return code: {result.returncode}")
-        if not input("Continue anyway? (y/n): ").lower().startswith('y'):
+        if not auto_yes and not input("Continue anyway? (y/n): ").lower().startswith('y'):
             sys.exit(1)
 
     return result
 
 def main():
+    parser = argparse.ArgumentParser(description="Install EndoGaussian for 3D surgical reconstruction")
+    parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompts")
+    args = parser.parse_args()
+
     print("""
     === ENDOGAUSSIAN INSTALLATION ===
     ========================================
@@ -46,7 +51,7 @@ def main():
     Rendering: 195 FPS real-time!
     """)
 
-    if not input("Ready to start? (y/n): ").lower().startswith('y'):
+    if not args.yes and not input("Ready to start? (y/n): ").lower().startswith('y'):
         print("Setup cancelled.")
         return
 
@@ -55,12 +60,12 @@ def main():
     os.chdir(project_root)
 
     # Check CUDA
-    print("\n📍 Checking CUDA availability...")
+    print("\n Checking CUDA availability...")
     cuda_check = run_command("nvcc --version", "Check CUDA version", check=False)
     if cuda_check.returncode != 0:
-        print("⚠️  WARNING: nvcc not found. Make sure CUDA is installed!")
+        print("WARNING: nvcc not found. Make sure CUDA is installed!")
         print("   Download from: https://developer.nvidia.com/cuda-11-7-0-download-archive")
-        if not input("Continue anyway? (y/n): ").lower().startswith('y'):
+        if not args.yes and not input("Continue anyway? (y/n): ").lower().startswith('y'):
             return
 
     # Create directory structure

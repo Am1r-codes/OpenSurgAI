@@ -70,6 +70,7 @@ from src.analysis.phase_space_3d import (
     get_transition_points,
 )
 from src.explanation.pipeline import NemotronClient, PHASE_EXPLANATIONS
+from src.visualization.gaussian_streamlit import render_3d_scene_tab
 from scripts.run_posthoc_qa import aggregate_summary, format_summary_for_prompt
 from scripts.run_report import generate_report
 
@@ -900,7 +901,7 @@ def main() -> None:
                     Surgical Case Review — <span style="color: #00CED1; font-weight: 700; font-size: 24px;">{video_id}</span>
                 </p>
                 <p style="margin: 12px 0 0 0; font-size: 13px; color: #666; font-style: italic;">
-                    NVIDIA TensorRT · Nemotron Reasoning · 3D Semantic Workflow Space
+                    NVIDIA TensorRT · Nemotron Reasoning · EndoGaussian 3D Reconstruction
                 </p>
             </div>
             <div style="text-align: right;">
@@ -969,7 +970,7 @@ def main() -> None:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Premium Tabbed Interface ─────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🎯 3D Workspace", "💬 AI Analysis", "⚖ Compare"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🎯 3D Scene", "💬 AI Analysis", "⚖ Compare"])
 
     # ══════════════════════════════════════════════════════════════════
     # TAB 1: OVERVIEW — Video, Timeline, Live Stats
@@ -1106,84 +1107,11 @@ def main() -> None:
     # ══════════════════════════════════════════════════════════════════
     # TAB 2: 3D WORKSPACE — Interactive 3D Semantic Surgical Space
     # ══════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 2: 3D SCENE — EndoGaussian Interactive Reconstruction
+    # ══════════════════════════════════════════════════════════════════
     with tab2:
-        st.markdown("### 🎯 3D Semantic Surgical Workflow Space")
-        st.caption("X = Phase Progression | Y = Phase Identity | Z = Activity / Complexity")
-
-        # Use shared timeline state for synchronization
-        analysis_time_3d = st.session_state["current_time"]
-        cursor_3d = lookup_frame_at_time(space, analysis_time_3d)
-
-        fig = build_workflow_figure(
-            space,
-            downsample=config["downsample"],
-            point_size=config["point_size"],
-            active_phase_idx=cursor_3d["phase_idx"],
-        )
-
-        # Enhanced cursor marker with glow
-        fig.add_trace(go.Scatter3d(
-            x=[cursor_3d["phase_progress"]],
-            y=[cursor_3d["phase_idx"]],
-            z=[cursor_3d["activity"]],
-            mode="markers",
-            marker=dict(
-                size=16,
-                color="#00CED1",
-                symbol="diamond",
-                line=dict(color="white", width=3),
-                opacity=1.0,
-            ),
-            text=[
-                f"<b>CURRENT POSITION</b><br>"
-                f"Time: {format_time(cursor_3d['time'])}<br>"
-                f"Phase: <b>{cursor_3d['phase_name']}</b><br>"
-                f"Progress: {cursor_3d['phase_progress']:.0%}<br>"
-                f"Activity: {cursor_3d['activity']:.3f}<br>"
-                f"Confidence: {cursor_3d['confidence']:.0%}"
-            ],
-            hoverinfo="text",
-            name="📍 Current Position",
-            showlegend=True,
-        ))
-
-        fig.update_layout(height=750)
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Phase analysis panels below
-        col_timeline, col_transitions = st.columns(2)
-
-        with col_timeline:
-            with st.expander("📅 Phase Timeline", expanded=True):
-                for i, seg in enumerate(segments):
-                    pc = PHASE_COLOURS[seg["phase_idx"] % len(PHASE_COLOURS)]
-                    st.markdown(
-                        f"**{i+1}.** <span style='color:{pc}; font-size: 16px;'>**{seg['phase_name']}**</span><br>"
-                        f"<span style='color: #888; font-size: 12px;'>"
-                        f"⏱ {format_time(seg['start_time'])} → {format_time(seg['end_time'])} "
-                        f"({seg['duration']:.0f}s · {seg['frame_count']:,} frames)</span>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-        with col_transitions:
-            with st.expander("🔄 Phase Transitions", expanded=True):
-                if transitions:
-                    for tr in transitions:
-                        conf = tr["confidence_at_transition"]
-                        stability_color = "#4CAF50" if conf >= 0.8 else "#F44336" if conf < 0.5 else "#FF9800"
-                        stability = "Stable" if conf >= 0.8 else "Unstable" if conf < 0.5 else "Moderate"
-
-                        st.markdown(
-                            f"**⏱ {format_time(tr['time'])}**<br>"
-                            f"<span style='color: #888;'>{tr['from_phase']}</span> → "
-                            f"<span style='color: #00CED1; font-weight: 700;'>{tr['to_phase']}</span><br>"
-                            f"<span style='color: {stability_color}; font-size: 12px;'>● {stability} ({conf:.0%})</span>",
-                            unsafe_allow_html=True,
-                        )
-                        st.markdown("<br>", unsafe_allow_html=True)
-                else:
-                    st.info("No phase transitions detected")
+        render_3d_scene_tab(video_id, _PROJECT_ROOT)
 
     # ══════════════════════════════════════════════════════════════════
     # TAB 3: AI ANALYSIS — Nemotron Post-hoc Q&A
