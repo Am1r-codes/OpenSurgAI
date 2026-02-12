@@ -81,113 +81,272 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS for professional dark theme ──────────────────────────
+# ── Premium Medical Software Interface CSS ──────────────────────────
 
 st.markdown("""
 <style>
-    /* Main title styling */
-    h1 {
-        color: #00CED1 !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.5px !important;
-        text-shadow: 0 2px 8px rgba(0, 206, 209, 0.3) !important;
+    /* === GLOBAL IMPROVEMENTS === */
+    .main .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 3rem !important;
+        max-width: 100% !important;
     }
 
-    /* Subheaders with teal accent */
+    /* Main title styling with gradient */
+    h1 {
+        background: linear-gradient(135deg, #00CED1 0%, #00FFFF 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 800 !important;
+        letter-spacing: 1px !important;
+        text-shadow: 0 0 30px rgba(0, 206, 209, 0.5);
+        font-size: 48px !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Subheaders with premium styling */
     h2, h3 {
         color: #00CED1 !important;
-        font-weight: 600 !important;
-        border-bottom: 2px solid rgba(0, 206, 209, 0.3);
-        padding-bottom: 8px;
-        margin-top: 16px !important;
+        font-weight: 700 !important;
+        border-bottom: 3px solid rgba(0, 206, 209, 0.4);
+        padding-bottom: 12px;
+        margin-top: 24px !important;
+        margin-bottom: 16px !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-size: 16px !important;
     }
 
-    /* Metric styling */
+    /* === ENHANCED METRICS === */
     [data-testid="stMetricValue"] {
-        color: #00CED1 !important;
-        font-size: 28px !important;
-        font-weight: 700 !important;
+        background: linear-gradient(135deg, #00CED1 0%, #00FFFF 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 36px !important;
+        font-weight: 800 !important;
+        text-shadow: 0 2px 8px rgba(0, 206, 209, 0.3);
     }
 
     [data-testid="stMetricLabel"] {
         color: #888 !important;
-        font-size: 12px !important;
+        font-size: 11px !important;
         text-transform: uppercase !important;
-        letter-spacing: 1px !important;
+        letter-spacing: 2px !important;
+        font-weight: 600 !important;
     }
 
-    /* Button styling */
+    [data-testid="stMetricDelta"] {
+        font-size: 14px !important;
+    }
+
+    /* Metric containers with glow */
+    [data-testid="metric-container"] {
+        background: linear-gradient(135deg, rgba(0,206,209,0.05) 0%, rgba(0,206,209,0.02) 100%);
+        border: 1px solid rgba(0, 206, 209, 0.3);
+        border-radius: 12px;
+        padding: 20px !important;
+        box-shadow: 0 4px 16px rgba(0, 206, 209, 0.1);
+        transition: all 0.3s ease;
+    }
+
+    [data-testid="metric-container"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 206, 209, 0.2);
+        border-color: rgba(0, 206, 209, 0.6);
+    }
+
+    /* === PREMIUM BUTTONS === */
     .stButton>button {
-        background-color: #00CED1 !important;
+        background: linear-gradient(135deg, #00CED1 0%, #00B8D4 100%) !important;
         color: #0A1120 !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
         border: none !important;
-        border-radius: 4px !important;
-        padding: 8px 24px !important;
-        transition: all 0.3s ease !important;
+        border-radius: 8px !important;
+        padding: 12px 32px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 13px !important;
+        box-shadow: 0 4px 12px rgba(0, 206, 209, 0.3);
     }
 
     .stButton>button:hover {
-        background-color: #00FFFF !important;
-        box-shadow: 0 4px 12px rgba(0, 206, 209, 0.4) !important;
+        background: linear-gradient(135deg, #00FFFF 0%, #00CED1 100%) !important;
+        box-shadow: 0 8px 24px rgba(0, 206, 209, 0.5) !important;
+        transform: translateY(-2px);
     }
 
-    /* Slider styling */
-    .stSlider>div>div>div {
+    .stButton>button:active {
+        transform: translateY(0px);
+        box-shadow: 0 2px 8px rgba(0, 206, 209, 0.3) !important;
+    }
+
+    /* === SLIDER ENHANCEMENTS === */
+    .stSlider {
+        padding: 16px 0;
+    }
+
+    .stSlider>div>div>div>div {
         background-color: #00CED1 !important;
     }
 
-    /* Video container */
+    .stSlider>div>div>div>div>div {
+        background-color: #00FFFF !important;
+        box-shadow: 0 0 12px rgba(0, 206, 209, 0.6);
+    }
+
+    /* === VIDEO CONTAINER === */
     [data-testid="stVideo"] {
-        border: 1px solid rgba(0, 206, 209, 0.3);
-        border-radius: 8px;
+        border: 2px solid rgba(0, 206, 209, 0.4);
+        border-radius: 12px;
         overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 206, 209, 0.2);
     }
 
-    /* Expander styling */
+    /* === EXPANDER PREMIUM STYLING === */
     .streamlit-expanderHeader {
-        background-color: rgba(0, 206, 209, 0.1) !important;
-        border-radius: 4px !important;
+        background: linear-gradient(135deg, rgba(0,206,209,0.15) 0%, rgba(0,206,209,0.05) 100%) !important;
+        border-radius: 8px !important;
         color: #00CED1 !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
+        border: 1px solid rgba(0, 206, 209, 0.3) !important;
+        padding: 12px 16px !important;
+        transition: all 0.3s ease !important;
     }
 
-    /* Sidebar styling */
+    .streamlit-expanderHeader:hover {
+        background: linear-gradient(135deg, rgba(0,206,209,0.25) 0%, rgba(0,206,209,0.1) 100%) !important;
+        border-color: rgba(0, 206, 209, 0.6) !important;
+    }
+
+    /* === SIDEBAR PREMIUM === */
     [data-testid="stSidebar"] {
-        background-color: #0A1120 !important;
-        border-right: 1px solid rgba(0, 206, 209, 0.2);
+        background: linear-gradient(180deg, #0A1120 0%, #0D1425 100%) !important;
+        border-right: 2px solid rgba(0, 206, 209, 0.3);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
     }
 
-    /* Caption styling */
+    [data-testid="stSidebar"]>div:first-child {
+        padding-top: 2rem;
+    }
+
+    /* === INPUT FIELDS === */
+    .stTextInput>div>div>input,
+    .stTextArea>div>div>textarea,
+    .stSelectbox>div>div>select,
+    .stMultiSelect>div>div>div {
+        background-color: rgba(20, 29, 46, 0.8) !important;
+        color: #E0E0E0 !important;
+        border: 2px solid rgba(0, 206, 209, 0.3) !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+        font-size: 14px !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .stTextInput>div>div>input:focus,
+    .stTextArea>div>div>textarea:focus,
+    .stSelectbox>div>div>select:focus {
+        border-color: rgba(0, 206, 209, 0.8) !important;
+        box-shadow: 0 0 16px rgba(0, 206, 209, 0.3) !important;
+    }
+
+    /* === TABS STYLING === */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: rgba(10, 17, 32, 0.5);
+        padding: 8px;
+        border-radius: 12px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent;
+        border-radius: 8px;
+        color: #888;
+        font-weight: 600;
+        padding: 12px 24px;
+        transition: all 0.3s ease;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: rgba(0, 206, 209, 0.1);
+        color: #00CED1;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, rgba(0,206,209,0.2) 0%, rgba(0,206,209,0.1) 100%) !important;
+        color: #00CED1 !important;
+        border-bottom: 3px solid #00CED1 !important;
+    }
+
+    /* === ALERTS & INFO BOXES === */
+    .stAlert {
+        border-radius: 12px !important;
+        border-left: 5px solid #00CED1 !important;
+        background: linear-gradient(135deg, rgba(0,206,209,0.1) 0%, rgba(0,206,209,0.05) 100%);
+        padding: 16px 20px !important;
+    }
+
+    /* === PLOTLY CHARTS === */
+    .js-plotly-plot {
+        border: 2px solid rgba(0, 206, 209, 0.3);
+        border-radius: 12px;
+        background-color: #0A1120 !important;
+        box-shadow: 0 8px 32px rgba(0, 206, 209, 0.15);
+    }
+
+    /* === DIVIDER === */
+    hr {
+        border-color: rgba(0, 206, 209, 0.3) !important;
+        margin: 32px 0 !important;
+    }
+
+    /* === CAPTION === */
     .stCaption {
         color: #666 !important;
-        font-size: 11px !important;
+        font-size: 12px !important;
+        font-style: italic;
     }
 
-    /* Input fields */
-    .stTextInput>div>div>input,
-    .stSelectbox>div>div>select {
-        background-color: #141D2E !important;
-        color: #E0E0E0 !important;
-        border: 1px solid rgba(0, 206, 209, 0.3) !important;
-        border-radius: 4px !important;
-    }
-
-    /* Info/warning boxes */
-    .stAlert {
-        border-radius: 8px !important;
-        border-left: 4px solid #00CED1 !important;
-    }
-
-    /* Hide Streamlit branding */
+    /* === HIDE STREAMLIT BRANDING === */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    header {visibility: hidden;}
 
-    /* Plotly chart container */
-    .js-plotly-plot {
-        border: 1px solid rgba(0, 206, 209, 0.2);
-        border-radius: 8px;
-        background-color: #0A1120 !important;
+    /* === CUSTOM PROGRESS RING === */
+    .progress-ring {
+        transform: rotate(-90deg);
+    }
+
+    .progress-ring-circle {
+        transition: stroke-dashoffset 0.5s ease;
+    }
+
+    /* === ANIMATIONS === */
+    @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 20px rgba(0, 206, 209, 0.3); }
+        50% { box-shadow: 0 0 40px rgba(0, 206, 209, 0.6); }
+    }
+
+    .glow-pulse {
+        animation: pulse-glow 3s ease-in-out infinite;
+    }
+
+    @keyframes slide-in {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .slide-in {
+        animation: slide-in 0.6s ease-out;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -205,6 +364,143 @@ def format_time(seconds: float) -> str:
     minutes = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{minutes}:{secs:02d}"
+
+
+# ── Enhanced Visualization Components ───────────────────────────────
+
+def render_circular_progress(percent: float, size: int = 120, label: str = "") -> str:
+    """Render an SVG circular progress indicator."""
+    radius = (size - 20) / 2
+    circumference = 2 * 3.14159 * radius
+    offset = circumference * (1 - percent)
+
+    return f"""
+    <div style="display: inline-block; text-align: center;">
+        <svg width="{size}" height="{size}" class="progress-ring">
+            <circle
+                cx="{size/2}"
+                cy="{size/2}"
+                r="{radius}"
+                stroke="rgba(0, 206, 209, 0.2)"
+                stroke-width="10"
+                fill="none"
+            />
+            <circle
+                cx="{size/2}"
+                cy="{size/2}"
+                r="{radius}"
+                stroke="#00CED1"
+                stroke-width="10"
+                fill="none"
+                stroke-dasharray="{circumference}"
+                stroke-dashoffset="{offset}"
+                class="progress-ring-circle"
+                style="filter: drop-shadow(0 0 8px rgba(0, 206, 209, 0.6));"
+            />
+            <text
+                x="{size/2}"
+                y="{size/2 + 8}"
+                text-anchor="middle"
+                style="font-size: 24px; font-weight: 700; fill: #00CED1;"
+            >
+                {int(percent * 100)}%
+            </text>
+        </svg>
+        <div style="margin-top: 8px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px;">
+            {label}
+        </div>
+    </div>
+    """
+
+
+def render_instrument_bar(name: str, confidence: float, color: str, active: bool = True) -> str:
+    """Render a horizontal confidence bar for an instrument."""
+    opacity = "1.0" if active else "0.4"
+    bar_width = confidence * 100
+
+    return f"""
+    <div style="margin: 8px 0; opacity: {opacity}; transition: all 0.3s ease;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 11px; font-weight: 600; color: {color}; text-transform: uppercase; letter-spacing: 0.5px;">
+                {name}
+            </span>
+            <span style="font-size: 11px; color: #888; font-family: monospace;">
+                {confidence:.2%}
+            </span>
+        </div>
+        <div style="width: 100%; height: 6px; background-color: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden;">
+            <div style="width: {bar_width}%; height: 100%; background: linear-gradient(90deg, {color} 0%, {color}AA 100%);
+                        border-radius: 3px; transition: width 0.5s ease;
+                        box-shadow: 0 0 10px {color}66;">
+            </div>
+        </div>
+    </div>
+    """
+
+
+def render_phase_timeline_bar(segments: list, current_time: float, duration: float) -> str:
+    """Render a visual phase timeline with current position marker."""
+    html_parts = ['<div style="position: relative; width: 100%; height: 40px; margin: 16px 0;">']
+
+    # Background bar
+    html_parts.append('<div style="position: absolute; width: 100%; height: 20px; top: 10px; background-color: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden; display: flex;">')
+
+    # Phase segments
+    for seg in segments:
+        start_pct = (seg["start_time"] / duration) * 100
+        width_pct = (seg["duration"] / duration) * 100
+        color = PHASE_COLOURS[seg["phase_idx"] % len(PHASE_COLOURS)]
+
+        html_parts.append(f'''
+        <div style="position: absolute; left: {start_pct}%; width: {width_pct}%; height: 100%;
+                    background-color: {color}; opacity: 0.8; border-right: 1px solid #0A1120;"
+             title="{seg['phase_name']} ({seg['duration']:.0f}s)">
+        </div>
+        ''')
+
+    html_parts.append('</div>')
+
+    # Current position marker
+    current_pct = (current_time / duration) * 100
+    html_parts.append(f'''
+    <div style="position: absolute; left: {current_pct}%; top: 0; width: 3px; height: 40px;
+                background: linear-gradient(180deg, #00CED1 0%, #00FFFF 100%);
+                box-shadow: 0 0 12px rgba(0, 206, 209, 0.8); z-index: 10; border-radius: 2px;">
+        <div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+                    width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent;
+                    border-top: 8px solid #00CED1;">
+        </div>
+    </div>
+    ''')
+
+    html_parts.append('</div>')
+    return ''.join(html_parts)
+
+
+def render_stat_card(label: str, value: str, icon: str = "●", trend: str = "") -> str:
+    """Render a premium stat card with optional trend indicator."""
+    trend_html = ""
+    if trend:
+        trend_color = "#4CAF50" if "↑" in trend else "#F44336" if "↓" in trend else "#888"
+        trend_html = f'<div style="font-size: 12px; color: {trend_color}; margin-top: 4px;">{trend}</div>'
+
+    return f"""
+    <div style="background: linear-gradient(135deg, rgba(0,206,209,0.08) 0%, rgba(0,206,209,0.02) 100%);
+                border: 1px solid rgba(0, 206, 209, 0.3); border-radius: 12px; padding: 16px;
+                box-shadow: 0 4px 16px rgba(0, 206, 209, 0.1); transition: all 0.3s ease;
+                cursor: pointer;">
+        <div style="color: #00CED1; font-size: 20px; margin-bottom: 8px;">{icon}</div>
+        <div style="color: #888; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">
+            {label}
+        </div>
+        <div style="background: linear-gradient(135deg, #00CED1 0%, #00FFFF 100%);
+                    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+                    font-size: 28px; font-weight: 800;">
+            {value}
+        </div>
+        {trend_html}
+    </div>
+    """
 
 
 # ── System prompt for Nemotron Q&A ──────────────────────────────────
@@ -575,195 +871,310 @@ def main() -> None:
     if "qa_history" not in st.session_state:
         st.session_state["qa_history"] = []
 
-    # ── Header ───────────────────────────────────────────────────────
+    # ── Premium Header ───────────────────────────────────────────────
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, rgba(0,206,209,0.1) 0%, rgba(10,17,32,0.3) 100%);
-                padding: 24px;
-                border-radius: 12px;
-                border: 1px solid rgba(0,206,209,0.3);
-                margin-bottom: 24px;">
-        <h1 style="margin: 0; font-size: 42px; color: #00CED1; text-shadow: 0 2px 12px rgba(0,206,209,0.4);">
-            OpenSurgAI
-        </h1>
-        <p style="margin: 8px 0 0 0; font-size: 18px; color: #888; font-weight: 300;">
-            Surgical Case Review — <span style="color: #00CED1; font-weight: 600;">{video_id}</span>
-        </p>
-        <p style="margin: 12px 0 0 0; font-size: 13px; color: #666; font-style: italic;">
-            3D Semantic Surgical Workflow Space represents procedural structure and activity,
-            <strong>not</strong> anatomical geometry or spatial reconstruction.
-        </p>
+    <div class="slide-in" style="background: linear-gradient(135deg, rgba(0,206,209,0.15) 0%, rgba(10,17,32,0.5) 100%);
+                padding: 32px;
+                border-radius: 16px;
+                border: 2px solid rgba(0,206,209,0.4);
+                margin-bottom: 32px;
+                box-shadow: 0 8px 32px rgba(0, 206, 209, 0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1 style="margin: 0; font-size: 56px;">
+                    OpenSurgAI
+                </h1>
+                <p style="margin: 12px 0 0 0; font-size: 20px; color: #888; font-weight: 300;">
+                    Surgical Case Review — <span style="color: #00CED1; font-weight: 700; font-size: 24px;">{video_id}</span>
+                </p>
+                <p style="margin: 12px 0 0 0; font-size: 13px; color: #666; font-style: italic;">
+                    NVIDIA TensorRT · Nemotron Reasoning · 3D Semantic Workflow Space
+                </p>
+            </div>
+            <div style="text-align: right;">
+                <div style="background: rgba(0,206,209,0.1); padding: 12px 20px; border-radius: 8px; border: 1px solid rgba(0,206,209,0.3);">
+                    <div style="font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;">GTC 2026 Demo</div>
+                    <div style="font-size: 20px; color: #00CED1; font-weight: 700; margin-top: 4px;">Ready</div>
+                </div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Metrics row ──────────────────────────────────────────────────
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total Frames", f"{summary['total_frames']:,}")
-    m2.metric("Duration", format_time(duration))
-    m3.metric("Phase Segments", len(segments))
+    # ── Enhanced Metrics Dashboard ───────────────────────────────────
+    col1, col2, col3, col4, col5 = st.columns(5)
 
-    # Time slider for 3D cursor sync (placed in the layout below)
+    with col1:
+        st.markdown(render_stat_card(
+            "Total Frames",
+            f"{summary['total_frames']:,}",
+            "▶",
+            ""
+        ), unsafe_allow_html=True)
 
-    # ── Three-column layout: LEFT | CENTER | RIGHT ───────────────────
-    left_col, center_col, right_col = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(render_stat_card(
+            "Duration",
+            format_time(duration),
+            "⏱",
+            ""
+        ), unsafe_allow_html=True)
 
-    # ── LEFT PANEL: Annotated Video + Auto-synced Phase Info ─────────
-    # The annotated overlay video is the PRIMARY visual context.
-    # Detection boxes, segmentation masks, and phase labels are
-    # PRE-RENDERED by the dashboard recorder.  No real-time inference
-    # runs inside this UI.
-    with left_col:
-        st.subheader("Annotated Video")
+    with col3:
+        st.markdown(render_stat_card(
+            "Phases",
+            str(len(segments)),
+            "⚕",
+            ""
+        ), unsafe_allow_html=True)
 
-        # Try annotated overlay first, fall back to raw video
-        annotated_video = Path(config["dashboard_dir"]) / f"{video_id}_demo.mp4"
-        raw_video = Path(config["video_dir"]) / f"{video_id}.mp4"
+    with col4:
+        avg_conf = sum(seg.get("avg_confidence", 0.8) for seg in segments) / len(segments) if segments else 0.8
+        st.markdown(render_stat_card(
+            "Avg Confidence",
+            f"{avg_conf:.1%}",
+            "✓",
+            ""
+        ), unsafe_allow_html=True)
 
-        if annotated_video.exists():
-            st.video(str(annotated_video), autoplay=True)
-            st.caption(
-                "Pre-rendered overlay — detections and phase labels baked in."
-            )
-        elif raw_video.exists():
-            st.video(str(raw_video), autoplay=True)
-            st.caption(
-                "Raw video — run the recorder to generate annotated overlay."
-            )
-        else:
-            st.info(
-                f"No video found for `{video_id}`.\n\n"
-                "Check directory paths in the sidebar."
-            )
+    with col5:
+        total_instruments = len(set(
+            inst for frame in space.get("frames", [])
+            for inst in frame.get("instruments", {}).keys()
+        ))
+        st.markdown(render_stat_card(
+            "Instruments",
+            str(total_instruments),
+            "🔧",
+            ""
+        ), unsafe_allow_html=True)
 
-        # Time slider — syncs the 3D cursor with the procedure timeline
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Premium Tabbed Interface ─────────────────────────────────────
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🎯 3D Workspace", "💬 AI Analysis", "⚖ Compare"])
+
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 1: OVERVIEW — Video, Timeline, Live Stats
+    # ══════════════════════════════════════════════════════════════════
+    with tab1:
+        # Global time slider at the top
+        st.markdown("### 🕐 Timeline Control")
         analysis_time = st.slider(
-            "Analysis point",
+            "Drag to navigate through the procedure",
             min_value=0.0,
             max_value=float(duration),
             value=float(duration / 2),
             step=1.0,
             format="%d s",
-            help="Drag to move the 3D cursor. Match this to the video playback position.",
+            help="Move the slider to analyze any point in the surgery",
+            key="timeline_slider_overview"
         )
-        st.caption(f"Showing: **{format_time(analysis_time)}** / {format_time(duration)}")
         cursor = lookup_frame_at_time(space, analysis_time)
 
-        # Current position
-        phase_colour = PHASE_COLOURS[cursor["phase_idx"] % len(PHASE_COLOURS)]
+        # Visual timeline bar
+        st.markdown(render_phase_timeline_bar(segments, analysis_time, duration), unsafe_allow_html=True)
+        st.caption(f"📍 Current position: **{format_time(analysis_time)}** / {format_time(duration)} — Phase: **{cursor['phase_name']}**")
 
-        st.markdown("#### Current Position")
-        st.metric("Time", format_time(cursor["time"]))
-        st.markdown(
-            f"**Phase:** <span style='color:{phase_colour}'>"
-            f"**{cursor['phase_name']}**</span>",
-            unsafe_allow_html=True,
-        )
-        st.metric("Confidence", f"{cursor['confidence']:.3f}")
-        st.metric("Instruments", cursor["instrument_count"])
-        st.metric("Progress", f"{cursor['phase_progress']:.0%}")
-        st.metric("Activity", f"{cursor['activity']:.3f}")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # Phase descriptions (collapsible)
-        with st.expander("Phase Descriptions", expanded=False):
-            for phase_name, desc in PHASE_EXPLANATIONS.items():
-                colour = PHASE_COLOURS[
-                    PHASE_ORDER.index(phase_name) % len(PHASE_COLOURS)
-                ]
-                st.markdown(
-                    f"<span style='color:{colour}'>**{phase_name}**</span>: "
-                    f"{desc}",
-                    unsafe_allow_html=True,
-                )
+        # Two-column layout: Video on left, stats on right
+        vid_col, stats_col = st.columns([3, 2])
 
-    # ── CENTER PANEL: 3D Semantic Surgical Workflow Space ─────────────
-    # This visualisation represents procedural structure and activity,
-    # not anatomical geometry or spatial reconstruction.
-    # The cursor auto-updates based on the virtual playback clock.
-    with center_col:
-        st.subheader("3D Semantic Surgical Workflow Space")
-        st.caption(
-            "X = Phase Progression | Y = Phase Identity | "
-            "Z = Activity / Complexity"
-        )
+        with vid_col:
+            st.markdown("### 📹 Surgical Video")
+
+            # Try annotated overlay first, fall back to raw video
+            annotated_video = Path(config["dashboard_dir"]) / f"{video_id}_demo.mp4"
+            raw_video = Path(config["video_dir"]) / f"{video_id}.mp4"
+
+            if annotated_video.exists():
+                st.video(str(annotated_video), autoplay=True)
+                st.caption("✅ Pre-rendered HUD overlay with instrument tracking")
+            elif raw_video.exists():
+                st.video(str(raw_video), autoplay=True)
+                st.warning("⚠️ Raw video — run recorder for HUD overlay")
+            else:
+                st.error(f"❌ No video found for `{video_id}`")
+
+        with stats_col:
+            phase_colour = PHASE_COLOURS[cursor["phase_idx"] % len(PHASE_COLOURS)]
+
+            # Current phase status box
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, rgba(0,206,209,0.12) 0%, rgba(0,206,209,0.04) 100%);
+                        border: 2px solid {phase_colour};
+                        border-radius: 12px;
+                        padding: 20px;
+                        margin-bottom: 20px;
+                        box-shadow: 0 4px 16px {phase_colour}33;">
+                <div style="font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">
+                    Current Phase
+                </div>
+                <div style="font-size: 26px; font-weight: 800; color: {phase_colour}; margin-bottom: 12px;">
+                    {cursor['phase_name']}
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                    <div>
+                        <div style="font-size: 10px; color: #666;">Progress</div>
+                        <div style="font-size: 18px; color: #00CED1; font-weight: 700;">{cursor['phase_progress']:.0%}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 10px; color: #666;">Confidence</div>
+                        <div style="font-size: 18px; color: #00CED1; font-weight: 700;">{cursor['confidence']:.0%}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 10px; color: #666;">Activity</div>
+                        <div style="font-size: 18px; color: #00CED1; font-weight: 700;">{cursor['activity']:.2f}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Circular progress indicators
+            prog_col1, prog_col2 = st.columns(2)
+            with prog_col1:
+                st.markdown(render_circular_progress(
+                    cursor['phase_progress'],
+                    size=120,
+                    label="Phase"
+                ), unsafe_allow_html=True)
+            with prog_col2:
+                overall_progress = analysis_time / duration
+                st.markdown(render_circular_progress(
+                    overall_progress,
+                    size=120,
+                    label="Overall"
+                ), unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Instrument tracking panel
+            st.markdown("### 🔧 Live Instruments")
+            frame = cursor.get("frame_data", {})
+            instruments = frame.get("instruments", {})
+
+            # Cholec80 7 instruments with colors
+            inst_list = [
+                ("Grasper", "#F44336"),
+                ("Bipolar", "#9C27B0"),
+                ("Hook", "#2196F3"),
+                ("Scissors", "#4CAF50"),
+                ("Clipper", "#FF9800"),
+                ("Irrigator", "#00BCD4"),
+                ("SpecimenBag", "#FFEB3B"),
+            ]
+
+            for inst_name, color in inst_list:
+                conf = instruments.get(inst_name, 0.0)
+                active = conf > 0.5
+                st.markdown(render_instrument_bar(inst_name, conf, color, active), unsafe_allow_html=True)
+
+            # Phase descriptions
+            with st.expander("📚 Phase Descriptions"):
+                for phase_name, desc in PHASE_EXPLANATIONS.items():
+                    colour = PHASE_COLOURS[PHASE_ORDER.index(phase_name) % len(PHASE_COLOURS)]
+                    st.markdown(f"<span style='color:{colour}'>**{phase_name}**</span>: {desc}", unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 2: 3D WORKSPACE — Interactive 3D Semantic Surgical Space
+    # ══════════════════════════════════════════════════════════════════
+    with tab2:
+        st.markdown("### 🎯 3D Semantic Surgical Workflow Space")
+        st.caption("X = Phase Progression | Y = Phase Identity | Z = Activity / Complexity")
+
+        # Time synchronization
+        if "timeline_slider_overview" in st.session_state:
+            analysis_time_3d = st.session_state["timeline_slider_overview"]
+            cursor_3d = lookup_frame_at_time(space, analysis_time_3d)
+        else:
+            analysis_time_3d = duration / 2
+            cursor_3d = lookup_frame_at_time(space, analysis_time_3d)
+
+        import plotly.graph_objects as go
 
         fig = build_workflow_figure(
             space,
             downsample=config["downsample"],
             point_size=config["point_size"],
-            active_phase_idx=cursor["phase_idx"],
+            active_phase_idx=cursor_3d["phase_idx"],
         )
 
-        # Add cursor marker at the current estimated position
-        import plotly.graph_objects as go
+        # Enhanced cursor marker with glow
         fig.add_trace(go.Scatter3d(
-            x=[cursor["phase_progress"]],
-            y=[cursor["phase_idx"]],
-            z=[cursor["activity"]],
+            x=[cursor_3d["phase_progress"]],
+            y=[cursor_3d["phase_idx"]],
+            z=[cursor_3d["activity"]],
             mode="markers",
             marker=dict(
-                size=14,
-                color="yellow",
-                symbol="cross",
-                line=dict(color="white", width=2),
+                size=16,
+                color="#00CED1",
+                symbol="diamond",
+                line=dict(color="white", width=3),
+                opacity=1.0,
             ),
             text=[
-                f"NOW: {format_time(cursor['time'])}<br>"
-                f"Phase: {cursor['phase_name']}<br>"
-                f"Progress: {cursor['phase_progress']:.0%}<br>"
-                f"Activity: {cursor['activity']:.3f}<br>"
-                f"Confidence: {cursor['confidence']:.3f}"
+                f"<b>CURRENT POSITION</b><br>"
+                f"Time: {format_time(cursor_3d['time'])}<br>"
+                f"Phase: <b>{cursor_3d['phase_name']}</b><br>"
+                f"Progress: {cursor_3d['phase_progress']:.0%}<br>"
+                f"Activity: {cursor_3d['activity']:.3f}<br>"
+                f"Confidence: {cursor_3d['confidence']:.0%}"
             ],
             hoverinfo="text",
-            name="Current Position",
+            name="📍 Current Position",
             showlegend=True,
         ))
 
-        fig.update_layout(height=650)
+        fig.update_layout(height=750)
         st.plotly_chart(fig, use_container_width=True)
 
-        # Phase timeline and transitions below the 3D plot
-        with st.expander("Phase Timeline", expanded=False):
-            for i, seg in enumerate(segments):
-                pc = PHASE_COLOURS[seg["phase_idx"] % len(PHASE_COLOURS)]
-                st.markdown(
-                    f"**{i+1}.** "
-                    f"<span style='color:{pc}'>"
-                    f"**{seg['phase_name']}**</span> — "
-                    f"{format_time(seg['start_time'])} to "
-                    f"{format_time(seg['end_time'])} "
-                    f"({seg['duration']:.0f}s, {seg['frame_count']} frames)",
-                    unsafe_allow_html=True,
-                )
+        # Phase analysis panels below
+        col_timeline, col_transitions = st.columns(2)
 
-        with st.expander("Phase Transitions", expanded=False):
-            if transitions:
-                for tr in transitions:
-                    conf = tr["confidence_at_transition"]
-                    stability = (
-                        "stable" if conf >= 0.8
-                        else "unstable" if conf < 0.5
-                        else "moderate"
-                    )
+        with col_timeline:
+            with st.expander("📅 Phase Timeline", expanded=True):
+                for i, seg in enumerate(segments):
+                    pc = PHASE_COLOURS[seg["phase_idx"] % len(PHASE_COLOURS)]
                     st.markdown(
-                        f"**{format_time(tr['time'])}** — "
-                        f"{tr['from_phase']} → **{tr['to_phase']}** "
-                        f"(confidence: {conf:.3f}, {stability})"
+                        f"**{i+1}.** <span style='color:{pc}; font-size: 16px;'>**{seg['phase_name']}**</span><br>"
+                        f"<span style='color: #888; font-size: 12px;'>"
+                        f"⏱ {format_time(seg['start_time'])} → {format_time(seg['end_time'])} "
+                        f"({seg['duration']:.0f}s · {seg['frame_count']:,} frames)</span>",
+                        unsafe_allow_html=True,
                     )
-            else:
-                st.info("No phase transitions detected.")
+                    st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── RIGHT PANEL: Nemotron Chat ───────────────────────────────────
-    # Nemotron is POST-HOC ONLY.  It reasons over the structured
-    # procedure summary, NOT over live video or pixels.
-    # Reasoning is hidden by default to keep the interface calm.
-    with right_col:
-        st.subheader("Ask Nemotron")
-        st.caption(
-            "Post-hoc case review.  Reasoning hidden by default."
-        )
+        with col_transitions:
+            with st.expander("🔄 Phase Transitions", expanded=True):
+                if transitions:
+                    for tr in transitions:
+                        conf = tr["confidence_at_transition"]
+                        stability_color = "#4CAF50" if conf >= 0.8 else "#F44336" if conf < 0.5 else "#FF9800"
+                        stability = "Stable" if conf >= 0.8 else "Unstable" if conf < 0.5 else "Moderate"
 
-        # ── Preset question buttons (functional, auto-trigger) ────
-        # When clicked, these IMMEDIATELY trigger Nemotron inference
-        # and display the response.  They are functional, not placeholders.
+                        st.markdown(
+                            f"**⏱ {format_time(tr['time'])}**<br>"
+                            f"<span style='color: #888;'>{tr['from_phase']}</span> → "
+                            f"<span style='color: #00CED1; font-weight: 700;'>{tr['to_phase']}</span><br>"
+                            f"<span style='color: {stability_color}; font-size: 12px;'>● {stability} ({conf:.0%})</span>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown("<br>", unsafe_allow_html=True)
+                else:
+                    st.info("No phase transitions detected")
+
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 3: AI ANALYSIS — Nemotron Post-hoc Q&A
+    # ══════════════════════════════════════════════════════════════════
+    with tab3:
+        st.markdown("### 💬 AI-Powered Case Analysis")
+        st.caption("🤖 Nemotron 70B reasoning over structured procedure summary")
+
+        # Preset questions in a nice grid
+        st.markdown("#### 🎯 Quick Questions")
+        preset_col1, preset_col2, preset_col3 = st.columns(3)
+
         presets = [
             "Summarize this surgery for a trainee.",
             "Explain what happened during Calot Triangle Dissection.",
@@ -772,20 +1183,30 @@ def main() -> None:
 
         triggered_question: str | None = None
 
-        for preset in presets:
-            if st.button(preset, key=f"preset_{preset[:30]}"):
-                triggered_question = preset
+        with preset_col1:
+            if st.button(presets[0], key="preset_0", use_container_width=True):
+                triggered_question = presets[0]
+        with preset_col2:
+            if st.button(presets[1], key="preset_1", use_container_width=True):
+                triggered_question = presets[1]
+        with preset_col3:
+            if st.button(presets[2], key="preset_2", use_container_width=True):
+                triggered_question = presets[2]
 
-        # Custom question input
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Custom question input with better styling
+        st.markdown("#### ✍️ Custom Question")
         question: str = st.text_area(
-            "Your question",
+            "Ask anything about this surgical case",
             value="",
-            height=80,
-            placeholder="e.g. Which phase was most complex?",
+            height=100,
+            placeholder="e.g. Which phase took the longest and why?",
             key="qa_text_area",
+            label_visibility="collapsed"
         ) or ""
 
-        if st.button("Ask Nemotron", type="primary") and question.strip():
+        if st.button("🚀 Ask Nemotron", type="primary", use_container_width=True) and question.strip():
             triggered_question = question.strip()
 
         # ── Execute Nemotron query if triggered ──────────────────
@@ -876,46 +1297,47 @@ def main() -> None:
             mime="text/markdown",
         )
 
-    # ── Compare Surgeries Section ────────────────────────────────────
-    st.divider()
-    st.subheader("Compare Surgeries")
-    st.caption(
-        "Select multiple procedures to overlay in the 3D workflow space "
-        "and ask Nemotron to analyse differences."
-    )
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 4: COMPARE — Multi-surgery comparison
+    # ══════════════════════════════════════════════════════════════════
+    with tab4:
+        st.markdown("### ⚖ Multi-Surgery Comparison")
+        st.caption("Overlay multiple procedures in 3D space and analyze differences with Nemotron")
 
-    all_videos = discover_videos(config["scene_dir"])
-    compare_videos = st.multiselect(
-        "Select videos to compare",
-        options=all_videos,
-        default=[video_id] if video_id in all_videos else [],
-        help="Pick 2-5 videos with scene data to compare their trajectories.",
-    )
+        all_videos = discover_videos(config["scene_dir"])
+        compare_videos = st.multiselect(
+            "📋 Select 2-5 videos to compare",
+            options=all_videos,
+            default=[video_id] if video_id in all_videos else [],
+            help="Choose procedures with scene data for 3D overlay comparison",
+        )
 
-    if len(compare_videos) >= 2:
-        # Load all selected spaces
-        compare_spaces = []
-        for vid in compare_videos:
-            sp = str(Path(config["scene_dir"]) / f"{vid}_scene.jsonl")
-            try:
-                compare_spaces.append(build_semantic_phase_space(sp))
-            except Exception:
-                st.warning(f"Could not load {vid}")
+        if len(compare_videos) >= 2:
+            # Load all selected spaces
+            compare_spaces = []
+            for vid in compare_videos:
+                sp = str(Path(config["scene_dir"]) / f"{vid}_scene.jsonl")
+                try:
+                    compare_spaces.append(build_semantic_phase_space(sp))
+                except Exception:
+                    st.warning(f"⚠️ Could not load {vid}")
 
-        if len(compare_spaces) >= 2:
-            comp_left, comp_right = st.columns([2, 1])
+            if len(compare_spaces) >= 2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                comp_left, comp_right = st.columns([2, 1])
 
-            with comp_left:
-                comp_fig = build_comparison_figure(
-                    compare_spaces,
-                    point_size=config["point_size"],
-                    downsample=config["downsample"],
-                )
-                comp_fig.update_layout(height=600)
-                st.plotly_chart(comp_fig, use_container_width=True)
+                with comp_left:
+                    st.markdown("### 📊 3D Comparison Overlay")
+                    comp_fig = build_comparison_figure(
+                        compare_spaces,
+                        point_size=config["point_size"],
+                        downsample=config["downsample"],
+                    )
+                    comp_fig.update_layout(height=650)
+                    st.plotly_chart(comp_fig, use_container_width=True)
 
-            with comp_right:
-                st.markdown("#### Ask Nemotron about the comparison")
+                with comp_right:
+                    st.markdown("### 🤖 AI Comparison Analysis")
 
                 # Session state for comparison chat
                 if "compare_history" not in st.session_state:
@@ -984,8 +1406,10 @@ def main() -> None:
                             st.caption(f"Tokens: {entry['tokens']}")
                             st.divider()
 
-    elif len(compare_videos) == 1:
-        st.info("Select at least 2 videos to enable comparison.")
+        elif len(compare_videos) == 1:
+            st.info("📌 Select at least 2 videos to enable comparison")
+        else:
+            st.info("📋 Select videos from the multiselect above to begin comparison")
 
 
 if __name__ == "__main__":
