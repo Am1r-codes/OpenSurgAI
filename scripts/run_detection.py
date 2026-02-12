@@ -120,6 +120,11 @@ def parse_args() -> argparse.Namespace:
              "When provided, uses the Cholec80-trained tool classifier "
              "instead of YOLO.",
     )
+    p.add_argument(
+        "--trt", type=str, default=None,
+        help="Path to TensorRT-compiled tool classifier (.ts). "
+             "Enables accelerated FP16 inference (~1,300 FPS).",
+    )
     p.add_argument("--device", type=str, default=None, help="PyTorch device (default: auto)")
     p.add_argument("--conf", type=float, default=0.25, help="Confidence threshold (default: 0.25)")
     p.add_argument("--iou", type=float, default=0.45, help="NMS IoU threshold (default: 0.45)")
@@ -148,10 +153,14 @@ def main() -> None:
     use_tool_classifier = args.model_weights is not None
 
     if use_tool_classifier:
+        trt_path = args.trt
         log.info("Mode: ResNet50 tool classifier (Cholec80-trained)")
         log.info("Weights: %s", args.model_weights)
+        if trt_path:
+            log.info("TensorRT: %s", trt_path)
         pipeline = ToolClassifierPipeline(
             model_weights=args.model_weights,
+            trt_path=trt_path,
             device=args.device,
             threshold=args.conf,
             half=args.half,
@@ -195,8 +204,9 @@ def main() -> None:
     # ── write run summary ─────────────────────────────────────────────
     if use_tool_classifier:
         run_summary = {
-            "mode": "tool_classifier",
+            "mode": "tool_classifier_trt" if pipeline.using_trt else "tool_classifier",
             "model_weights": args.model_weights,
+            "tensorrt": pipeline.using_trt,
             "device": pipeline.device,
             "half": pipeline.half,
             "batch_size": pipeline.batch_size,

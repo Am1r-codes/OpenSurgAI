@@ -60,6 +60,52 @@ def _load_jsonl_index(path: Path) -> dict[int, dict]:
     return index
 
 
+def _build_phase_timeline(scene_index: dict[int, dict]) -> list[dict]:
+    """Build phase segments from scene data for the timeline bar.
+
+    Returns a list of dicts:
+        [{"start": int, "end": int, "phase_id": int, "phase_name": str}, ...]
+    """
+    if not scene_index:
+        return []
+
+    segments: list[dict] = []
+    sorted_frames = sorted(scene_index.keys())
+    current_pid: int | None = None
+    seg_start: int = 0
+
+    for fidx in sorted_frames:
+        scene = scene_index[fidx]
+        phase = scene.get("phase")
+        if not phase:
+            continue
+        pid = phase.get("phase_id")
+        pname = phase.get("phase_name", "")
+
+        if pid != current_pid:
+            if current_pid is not None:
+                segments.append({
+                    "start": seg_start,
+                    "end": fidx,
+                    "phase_id": current_pid,
+                    "phase_name": _last_pname,
+                })
+            current_pid = pid
+            _last_pname = pname
+            seg_start = fidx
+
+    # Close last segment
+    if current_pid is not None and sorted_frames:
+        segments.append({
+            "start": seg_start,
+            "end": sorted_frames[-1] + 1,
+            "phase_id": current_pid,
+            "phase_name": _last_pname,
+        })
+
+    return segments
+
+
 # ── Demo recorder ─────────────────────────────────────────────────────
 
 class DemoRecorder:
@@ -152,6 +198,16 @@ class DemoRecorder:
             len(scene_index), len(expl_index),
         )
 
+        # Pre-compute phase timeline for the HUD bottom bar
+        phase_segments = _build_phase_timeline(scene_index)
+        total_scene_frames = max(scene_index.keys()) + 1 if scene_index else 0
+        if phase_segments:
+            self.renderer.set_phase_timeline(phase_segments, total_scene_frames)
+            log.info(
+                "Phase timeline: %d segments over %d frames",
+                len(phase_segments), total_scene_frames,
+            )
+
         # Open source video
         with VideoReader(video_path, stride=stride) as reader:
             fps = self.output_fps or reader.fps
@@ -235,11 +291,11 @@ class DemoRecorder:
                     if anatomy:
                         mask = self._load_mask(anatomy.get("mask_file"))
 
-                    # Render normal overlays (no explanation text — title cards handle it)
+                    # Render HUD overlays (with explanation text)
                     annotated = self.renderer.render_frame(
                         frame=bgr_frame,
                         scene=scene,
-                        explanation=None,
+                        explanation=explanation,
                         grounded=grounded,
                         mask=mask,
                     )

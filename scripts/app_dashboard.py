@@ -295,13 +295,17 @@ _PYTHON = str(Path(sys.executable))
 def _run_pipeline(video_path: Path, video_id: str, api_key: str | None) -> None:
     """Run the full analysis pipeline on an uploaded video."""
     # Use tool classifier if weights exist, otherwise fall back to YOLO
+    # Prefer TensorRT-compiled model for accelerated inference
     tool_weights = _PROJECT_ROOT / "weights" / "tool_resnet50.pt"
+    tool_trt = _PROJECT_ROOT / "weights" / "tensorrt" / "tool_resnet50_trt.ts"
     det_cmd = [
         _PYTHON, str(_PROJECT_ROOT / "scripts" / "run_detection.py"),
         "--video", str(video_path),
     ]
     if tool_weights.exists():
         det_cmd += ["--model-weights", str(tool_weights)]
+    if tool_trt.exists():
+        det_cmd += ["--trt", str(tool_trt)]
 
     steps = [
         ("Detection", det_cmd),
