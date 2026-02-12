@@ -81,6 +81,117 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Custom CSS for professional dark theme ──────────────────────────
+
+st.markdown("""
+<style>
+    /* Main title styling */
+    h1 {
+        color: #00CED1 !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
+        text-shadow: 0 2px 8px rgba(0, 206, 209, 0.3) !important;
+    }
+
+    /* Subheaders with teal accent */
+    h2, h3 {
+        color: #00CED1 !important;
+        font-weight: 600 !important;
+        border-bottom: 2px solid rgba(0, 206, 209, 0.3);
+        padding-bottom: 8px;
+        margin-top: 16px !important;
+    }
+
+    /* Metric styling */
+    [data-testid="stMetricValue"] {
+        color: #00CED1 !important;
+        font-size: 28px !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stMetricLabel"] {
+        color: #888 !important;
+        font-size: 12px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
+    }
+
+    /* Button styling */
+    .stButton>button {
+        background-color: #00CED1 !important;
+        color: #0A1120 !important;
+        font-weight: 600 !important;
+        border: none !important;
+        border-radius: 4px !important;
+        padding: 8px 24px !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .stButton>button:hover {
+        background-color: #00FFFF !important;
+        box-shadow: 0 4px 12px rgba(0, 206, 209, 0.4) !important;
+    }
+
+    /* Slider styling */
+    .stSlider>div>div>div {
+        background-color: #00CED1 !important;
+    }
+
+    /* Video container */
+    [data-testid="stVideo"] {
+        border: 1px solid rgba(0, 206, 209, 0.3);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background-color: rgba(0, 206, 209, 0.1) !important;
+        border-radius: 4px !important;
+        color: #00CED1 !important;
+        font-weight: 600 !important;
+    }
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #0A1120 !important;
+        border-right: 1px solid rgba(0, 206, 209, 0.2);
+    }
+
+    /* Caption styling */
+    .stCaption {
+        color: #666 !important;
+        font-size: 11px !important;
+    }
+
+    /* Input fields */
+    .stTextInput>div>div>input,
+    .stSelectbox>div>div>select {
+        background-color: #141D2E !important;
+        color: #E0E0E0 !important;
+        border: 1px solid rgba(0, 206, 209, 0.3) !important;
+        border-radius: 4px !important;
+    }
+
+    /* Info/warning boxes */
+    .stAlert {
+        border-radius: 8px !important;
+        border-left: 4px solid #00CED1 !important;
+    }
+
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Plotly chart container */
+    .js-plotly-plot {
+        border: 1px solid rgba(0, 206, 209, 0.2);
+        border-radius: 8px;
+        background-color: #0A1120 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ── Constants ────────────────────────────────────────────────────────
 
 
@@ -353,8 +464,16 @@ def _run_pipeline(video_path: Path, video_id: str, api_key: str | None) -> None:
 
 def render_sidebar() -> dict:
     """Render sidebar controls and return config."""
-    st.sidebar.title("OpenSurgAI")
-    st.sidebar.caption("Surgical Case Review — NVIDIA GTC Demo")
+    st.sidebar.markdown("""
+    <div style="text-align: center; padding: 16px 0; margin-bottom: 16px;">
+        <h1 style="color: #00CED1; font-size: 32px; margin: 0; text-shadow: 0 2px 8px rgba(0,206,209,0.4);">
+            OpenSurgAI
+        </h1>
+        <p style="color: #666; font-size: 11px; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 1.5px;">
+            NVIDIA GTC 2026 Demo
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Scene directory (for scene JSONL files)
     default_scene_dir = str(_PROJECT_ROOT / "experiments" / "scene")
@@ -457,11 +576,24 @@ def main() -> None:
         st.session_state["qa_history"] = []
 
     # ── Header ───────────────────────────────────────────────────────
-    st.title(f"Surgical Case Review — {video_id}")
-    st.caption(
-        "3D Semantic Surgical Workflow Space: represents procedural structure "
-        "and activity, **not** anatomical geometry or spatial reconstruction."
-    )
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, rgba(0,206,209,0.1) 0%, rgba(10,17,32,0.3) 100%);
+                padding: 24px;
+                border-radius: 12px;
+                border: 1px solid rgba(0,206,209,0.3);
+                margin-bottom: 24px;">
+        <h1 style="margin: 0; font-size: 42px; color: #00CED1; text-shadow: 0 2px 12px rgba(0,206,209,0.4);">
+            OpenSurgAI
+        </h1>
+        <p style="margin: 8px 0 0 0; font-size: 18px; color: #888; font-weight: 300;">
+            Surgical Case Review — <span style="color: #00CED1; font-weight: 600;">{video_id}</span>
+        </p>
+        <p style="margin: 12px 0 0 0; font-size: 13px; color: #666; font-style: italic;">
+            3D Semantic Surgical Workflow Space represents procedural structure and activity,
+            <strong>not</strong> anatomical geometry or spatial reconstruction.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # ── Metrics row ──────────────────────────────────────────────────
     m1, m2, m3 = st.columns(3)

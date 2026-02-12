@@ -1,0 +1,15 @@
+[theme]
+# OpenSurgAI Dark Theme — matches HUD overlay branding
+primaryColor = "#00CED1"        # Teal accent (matching HUD)
+backgroundColor = "#0A1120"      # Dark navy background (matching HUD panels)
+secondaryBackgroundColor = "#141D2E"  # Slightly lighter for cards
+textColor = "#E0E0E0"            # Light gray text
+font = "monospace"               # Monospace font for technical feel
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
