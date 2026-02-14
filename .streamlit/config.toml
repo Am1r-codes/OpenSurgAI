@@ -10,6 +10,7 @@ font = "monospace"               # Monospace font for technical feel
 headless = true
 enableCORS = false
 enableXsrfProtection = true
+maxUploadSize = 2048
 
 [browser]
 gatherUsageStats = false

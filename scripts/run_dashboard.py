@@ -183,7 +183,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-confidence", action="store_true", help="Hide confidence values")
 
     # ── output ────────────────────────────────────────────────────────
-    p.add_argument("--codec", type=str, default="mp4v", help="FourCC codec (default: mp4v)")
+    p.add_argument("--codec", type=str, default="avc1", help="FourCC codec (default: avc1 / H.264)")
     p.add_argument("--output-fps", type=float, default=None, help="Output FPS (default: source FPS)")
     p.add_argument(
         "--output-dir", type=Path, default=default_output_dir(),

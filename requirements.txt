@@ -4,6 +4,7 @@
 # ── Deep-learning core ────────────────────────────────────────────────
 torch>=2.2.0
 torchvision>=0.17.0
+torch_tensorrt>=2.0.0
 
 # ── YOLOv8 (Ultralytics) ─────────────────────────────────────────────
 ultralytics>=8.1.0

@@ -7,7 +7,7 @@ suitable for public sharing.
 
 Output codec
 ------------
-Uses H.264 (``mp4v`` / ``avc1``) via OpenCV's VideoWriter for maximum
+Uses H.264 (``avc1``) via OpenCV's VideoWriter for maximum
 compatibility.  The output preserves the original video's resolution and
 frame rate.
 
@@ -129,7 +129,7 @@ class DemoRecorder:
     def __init__(
         self,
         renderer: OverlayRenderer | None = None,
-        codec: str = "mp4v",
+        codec: str = "avc1",
         output_fps: float | None = None,
         mask_dir: Path | None = None,
         title_card_frames: int = 35,

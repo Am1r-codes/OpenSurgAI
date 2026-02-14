@@ -5,7 +5,6 @@ Checks all required components for GTC 2026 demo:
 - Python dependencies
 - CUDA availability
 - TensorRT models
-- EndoGaussian installation
 - Data files
 - API keys
 
@@ -65,6 +64,7 @@ def main():
 {Colors.BOLD}{Colors.CYAN}
     ================================================
       OpenSurgAI Setup Validation
+      Multi-NIM Surgical Intelligence Platform
     ================================================
 {Colors.RESET}
     Checking all dependencies for GTC 2026 demo...
@@ -101,7 +101,7 @@ def main():
         "streamlit": "Streamlit",
         "plotly": "Plotly",
         "tqdm": "TQDM",
-        "plyfile": "PLYFile (for 3D viewer)",
+        "httpx": "HTTPX (NIM API client)",
     }
 
     for module_name, display_name in required_packages.items():
@@ -125,7 +125,7 @@ def main():
         if torch.cuda.is_available():
             check_pass(f"CUDA available (version {torch.version.cuda})")
             check_info(f"   GPU: {torch.cuda.get_device_name(0)}")
-            check_info(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+            check_info(f"   Memory: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB")
         else:
             check_warning(
                 "CUDA NOT available",
@@ -135,89 +135,68 @@ def main():
         check_fail("PyTorch not installed", "Cannot check CUDA")
         all_checks_passed = False
 
-    # Check nvcc
-    try:
-        result = subprocess.run(
-            ["nvcc", "--version"],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        if result.returncode == 0:
-            version_line = [line for line in result.stdout.split('\n') if 'release' in line.lower()]
-            if version_line:
-                check_pass(f"nvcc compiler found ({version_line[0].strip()})")
-        else:
-            check_warning("nvcc compiler not found", "Needed for EndoGaussian CUDA extensions")
-    except FileNotFoundError:
-        check_warning("nvcc compiler not found", "Needed for EndoGaussian CUDA extensions")
-
     # ══════════════════════════════════════════════════════════════
     # 4. TensorRT Models
     # ══════════════════════════════════════════════════════════════
     print_header("4. TensorRT Models")
 
-    models_dir = project_root / "models"
-    trt_model = models_dir / "cholec80_resnet50_trt_fp16.engine"
+    weights_dir = project_root / "weights"
+    trt_dir = weights_dir / "tensorrt"
 
-    if trt_model.exists():
-        size_mb = trt_model.stat().st_size / 1e6
-        check_pass(f"TensorRT model found ({size_mb:.1f} MB)")
+    # Check for tool classifier weights
+    tool_weights = weights_dir / "tool_resnet50.pt"
+    if tool_weights.exists():
+        size_mb = tool_weights.stat().st_size / 1e6
+        check_pass(f"Tool classifier weights found ({size_mb:.1f} MB)")
     else:
-        check_fail(
-            "TensorRT model NOT found",
-            "Run: python scripts/export_tensorrt.py"
-        )
-        all_checks_passed = False
+        check_warning("Tool classifier weights not found", "Place tool_resnet50.pt in weights/")
 
-    # Check PyTorch fallback
-    pt_model = models_dir / "cholec80_resnet50.pth"
-    if pt_model.exists():
-        check_pass("PyTorch model found (fallback available)")
+    # Check for TensorRT compiled model
+    tool_trt = trt_dir / "tool_resnet50_trt.ts"
+    if tool_trt.exists():
+        size_mb = tool_trt.stat().st_size / 1e6
+        check_pass(f"TensorRT FP16 model found ({size_mb:.1f} MB)")
     else:
-        check_warning("PyTorch model NOT found", "No fallback if TensorRT fails")
+        check_info("TensorRT compiled model not found (will use PyTorch fallback)")
+
+    # Phase recognition weights
+    phase_weights = weights_dir / "phase_resnet50.pt"
+    if phase_weights.exists():
+        check_pass("Phase recognition weights found")
+    else:
+        check_warning("Phase recognition weights not found")
 
     # ══════════════════════════════════════════════════════════════
-    # 5. EndoGaussian Installation
+    # 5. NIM API Services
     # ══════════════════════════════════════════════════════════════
-    print_header("5. EndoGaussian 3D Reconstruction")
+    print_header("5. NVIDIA NIM API Services")
 
-    endogaussian_dir = project_root / "external" / "EndoGaussian"
+    import os
 
-    if endogaussian_dir.exists():
-        check_pass("EndoGaussian repository cloned")
-
-        # Check for submodules
-        diff_gauss = endogaussian_dir / "submodules" / "diff-gaussian-rasterization"
-        simple_knn = endogaussian_dir / "submodules" / "simple-knn"
-
-        if diff_gauss.exists() and simple_knn.exists():
-            check_pass("Submodules initialized")
-        else:
-            check_warning(
-                "Submodules NOT initialized",
-                "cd external/EndoGaussian && git submodule update --init --recursive"
-            )
-
-        # Check for conda environment
-        result = subprocess.run(
-            ["conda", "env", "list"],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        if "endogaussian" in result.stdout:
-            check_pass("Conda environment 'endogaussian' exists")
-        else:
-            check_warning(
-                "Conda environment NOT created",
-                "Run: python scripts/setup_endogaussian.py --yes"
-            )
+    api_key = os.getenv("NVIDIA_API_KEY") or os.getenv("NEMOTRON_API_KEY")
+    if api_key:
+        check_pass("NVIDIA API key configured")
+        check_info("   Nemotron 49B: Ready (text reasoning)")
+        check_info("   Nemotron VL: Ready (visual analysis)")
     else:
-        check_fail(
-            "EndoGaussian NOT installed",
-            "Run: python scripts/setup_endogaussian.py --yes"
+        check_warning(
+            "NVIDIA API key not set",
+            "Set NVIDIA_API_KEY env var for Nemotron NIM services"
         )
+
+    # Check VLM client can be imported
+    try:
+        from src.explanation.vlm_client import VLMClient
+        check_pass("VLMClient module available")
+    except ImportError as e:
+        check_fail(f"VLMClient import failed: {e}")
+
+    # Check frame extractor
+    try:
+        from src.explanation.frame_extractor import extract_frame_at_time
+        check_pass("Frame extractor module available")
+    except ImportError as e:
+        check_fail(f"Frame extractor import failed: {e}")
 
     # ══════════════════════════════════════════════════════════════
     # 6. Data Files
@@ -230,7 +209,7 @@ def main():
         videos = list(videos_dir.glob("*.mp4"))
         if videos:
             check_pass(f"Found {len(videos)} video file(s)")
-            for video in videos[:3]:  # Show first 3
+            for video in videos[:3]:
                 check_info(f"   - {video.name}")
             if len(videos) > 3:
                 check_info(f"   ... and {len(videos) - 3} more")
@@ -243,7 +222,7 @@ def main():
         )
 
     # Check for scene data
-    scenes_dir = project_root / "experiments" / "scenes"
+    scenes_dir = project_root / "experiments" / "scene"
     if scenes_dir.exists():
         scenes = list(scenes_dir.glob("*_scene.jsonl"))
         if scenes:
@@ -251,32 +230,26 @@ def main():
         else:
             check_info("No scene files yet (will be created by detection pipeline)")
     else:
-        check_info("Scenes directory will be created on first run")
+        check_info("Scene directory will be created on first run")
 
     # ══════════════════════════════════════════════════════════════
-    # 7. API Keys
+    # 7. Dashboard Configuration
     # ══════════════════════════════════════════════════════════════
-    print_header("7. API Keys (Optional)")
-
-    import os
-
-    nemotron_key = os.getenv("NEMOTRON_API_KEY") or os.getenv("NVIDIA_API_KEY")
-    if nemotron_key:
-        check_pass("Nemotron API key configured")
-    else:
-        check_info("Nemotron API key not set (Q&A features will be limited)")
-        check_info("   Set NEMOTRON_API_KEY or NVIDIA_API_KEY environment variable")
-
-    # ══════════════════════════════════════════════════════════════
-    # 8. Dashboard Configuration
-    # ══════════════════════════════════════════════════════════════
-    print_header("8. Dashboard Configuration")
+    print_header("7. Dashboard Configuration")
 
     streamlit_config = project_root / ".streamlit" / "config.toml"
     if streamlit_config.exists():
         check_pass("Streamlit config found")
     else:
         check_info("Streamlit config not found (will use defaults)")
+
+    # Check dashboard can be imported
+    dashboard_file = project_root / "scripts" / "app_dashboard.py"
+    if dashboard_file.exists():
+        check_pass("Dashboard script found")
+    else:
+        check_fail("Dashboard script NOT found")
+        all_checks_passed = False
 
     # ══════════════════════════════════════════════════════════════
     # Summary
@@ -288,13 +261,11 @@ def main():
 {Colors.GREEN}{Colors.BOLD}
     [+] ALL CRITICAL CHECKS PASSED!
 {Colors.RESET}
-    Your OpenSurgAI setup is ready for the GTC 2026 demo!
+    Your OpenSurgAI Multi-NIM platform is ready for GTC 2026!
 
     Next steps:
-    1. Run full demo: python scripts/run_full_demo.py --video video49
-    2. Or launch dashboard: streamlit run scripts/app_dashboard.py
-
-    Good luck with your submission!
+    1. Launch dashboard: streamlit run scripts/app_dashboard.py
+    2. Or full demo: python scripts/run_full_demo.py --video video49
         """)
         return 0
     else:
@@ -306,8 +277,7 @@ def main():
 
     Common fixes:
     - Install dependencies: pip install -r requirements.txt
-    - Install EndoGaussian: scripts\setup_endogaussian.bat (Windows)
-    - Export TensorRT model: python scripts/export_tensorrt.py
+    - Set API key: export NVIDIA_API_KEY=nvapi-...
     - Download Cholec80 videos to data/cholec80/videos/
         """)
         return 1

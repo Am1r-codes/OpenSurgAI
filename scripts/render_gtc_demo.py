@@ -3,9 +3,8 @@
 
 Creates a 60-90 second highlight reel showing:
 1. Detection pipeline (TensorRT inference)
-2. 3D reconstruction visualization
-3. Nemotron AI reasoning
-4. Dashboard interactivity
+2. Multi-NIM AI analysis (Nemotron + Nemotron VL)
+3. Dashboard interactivity
 
 Perfect for GTC Golden Ticket submission!
 """
@@ -72,7 +71,7 @@ def create_title_card(text: str, width: int = 1920, height: int = 1080) -> np.nd
     )
 
     # Add subtitle
-    subtitle = "NVIDIA GTC 2026 | AI-Powered Surgical Intelligence"
+    subtitle = "Multi-NIM Surgical Intelligence | NVIDIA GTC 2026"
     font_scale_sub = 0.8
     thickness_sub = 2
 
@@ -192,6 +191,7 @@ def main():
     print(f"""
     ==================================================
       GTC 2026 DEMO VIDEO RENDERER
+      Multi-NIM Surgical Intelligence Platform
     ==================================================
 
     Creating cinematic highlight reel...
@@ -203,7 +203,7 @@ def main():
 
     # Video writer setup
     width, height = 1920, 1080
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
     out = cv2.VideoWriter(str(args.output), fourcc, args.fps, (width, height))
 
     total_frames = args.duration * args.fps
@@ -211,7 +211,7 @@ def main():
     # ══════════════════════════════════════════════════════════════
     # Scene 1: Opening Title (3 seconds)
     # ══════════════════════════════════════════════════════════════
-    print("\n[1/6] Rendering opening title...")
+    print("\n[1/5] Rendering opening title...")
     title_frame = create_title_card("OpenSurgAI")
 
     for _ in tqdm(range(3 * args.fps), desc="Title"):
@@ -220,11 +220,11 @@ def main():
     # ══════════════════════════════════════════════════════════════
     # Scene 2: TensorRT Feature Card (5 seconds)
     # ══════════════════════════════════════════════════════════════
-    print("\n[2/6] Rendering TensorRT feature card...")
+    print("\n[2/5] Rendering TensorRT feature card...")
     tensorrt_card = create_feature_card(
-        "TensorRT Acceleration",
+        "TensorRT FP16 Acceleration",
         [
-            ("Inference Speed", "1,300 FPS"),
+            ("Inference Speed", "1,335 FPS"),
             ("Model", "Cholec80 Tool Classifier"),
             ("Precision", "FP16 Optimized"),
             ("Speedup", "26x vs PyTorch")
@@ -237,7 +237,7 @@ def main():
     # ══════════════════════════════════════════════════════════════
     # Scene 3: Annotated Video Clip (30 seconds)
     # ══════════════════════════════════════════════════════════════
-    print("\n[3/6] Adding annotated video clip...")
+    print("\n[3/5] Adding annotated video clip...")
 
     # Load annotated video with HUD overlay
     overlay_video = project_root / "experiments" / "dashboard" / f"{video_id}_demo.mp4"
@@ -268,48 +268,31 @@ def main():
     else:
         print(f"    [!] Overlay video not found: {overlay_video}")
         print("    [*] Using placeholder...")
-        placeholder = create_title_card("Run render_demo_video.py first")
+        placeholder = create_title_card("Run run_dashboard.py first")
         for _ in tqdm(range(30 * args.fps), desc="Placeholder"):
             out.write(placeholder)
 
     # ══════════════════════════════════════════════════════════════
-    # Scene 4: 3D Reconstruction Card (10 seconds)
+    # Scene 4: Multi-NIM AI Card (12 seconds)
     # ══════════════════════════════════════════════════════════════
-    print("\n[4/6] Rendering 3D reconstruction feature...")
-    gaussian_card = create_feature_card(
-        "EndoGaussian 3D Reconstruction",
+    print("\n[4/5] Rendering Multi-NIM AI features...")
+    nim_card = create_feature_card(
+        "Multi-NIM AI Analysis",
         [
-            ("Rendering Speed", "195 FPS Real-time"),
-            ("Training Time", "2 Minutes"),
-            ("Quality", "Photorealistic (37.8 PSNR)"),
-            ("Features", "Interactive Click-to-Explore")
+            ("Nemotron 49B", "Surgical Text Reasoning"),
+            ("Nemotron VL", "Visual Frame Analysis"),
+            ("TensorRT FP16", "1,335 FPS Real-time"),
+            ("Orchestration", "3 NIM Services")
         ]
     )
 
-    for _ in tqdm(range(10 * args.fps), desc="3D Features"):
-        out.write(gaussian_card)
+    for _ in tqdm(range(12 * args.fps), desc="Multi-NIM"):
+        out.write(nim_card)
 
     # ══════════════════════════════════════════════════════════════
-    # Scene 5: Nemotron AI Card (7 seconds)
+    # Scene 5: Closing Title (5 seconds)
     # ══════════════════════════════════════════════════════════════
-    print("\n[5/6] Rendering Nemotron AI feature...")
-    nemotron_card = create_feature_card(
-        "Nemotron 70B Reasoning",
-        [
-            ("Model", "NVIDIA Nemotron-70B"),
-            ("Capability", "Surgical Context Understanding"),
-            ("Features", "Q&A + Explanations"),
-            ("Integration", "Real-time Phase Analysis")
-        ]
-    )
-
-    for _ in tqdm(range(7 * args.fps), desc="Nemotron"):
-        out.write(nemotron_card)
-
-    # ══════════════════════════════════════════════════════════════
-    # Scene 6: Closing Title (5 seconds)
-    # ══════════════════════════════════════════════════════════════
-    print("\n[6/6] Rendering closing title...")
+    print("\n[5/5] Rendering closing title...")
     closing_frame = create_title_card("Powered by NVIDIA")
 
     for _ in tqdm(range(5 * args.fps), desc="Closing"):
@@ -331,11 +314,6 @@ def main():
     Resolution: 1920x1080 @ {args.fps} FPS
 
     Ready for GTC 2026 submission!
-
-    Next steps:
-    1. Review the video
-    2. Upload to platform
-    3. Submit with #NVIDIAGTC
     """)
 
 

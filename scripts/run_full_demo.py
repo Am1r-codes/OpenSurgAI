@@ -3,12 +3,11 @@
 
 One-command automation for the full OpenSurgAI workflow:
 1. Run detection pipeline (TensorRT tool classification)
-2. Train EndoGaussian 3D reconstruction
-3. Generate Nemotron analysis
-4. Render demo video with HUD overlay
-5. Launch interactive dashboard
+2. Generate Nemotron analysis
+3. Render demo video with HUD overlay
+4. Launch interactive dashboard
 
-Perfect for GTC 2026 Golden Ticket submission!
+Multi-NIM Surgical Intelligence Platform for GTC 2026.
 """
 
 import argparse
@@ -80,10 +79,10 @@ Examples:
   # Full pipeline on video49
   python scripts/run_full_demo.py --video video49
 
-  # Skip 3D training (if already trained)
-  python scripts/run_full_demo.py --video video49 --skip-3d
+  # Skip detection (use existing results)
+  python scripts/run_full_demo.py --video video49 --skip-detection
 
-  # Only run dashboard (everything else done)
+  # Only launch dashboard
   python scripts/run_full_demo.py --video video49 --dashboard-only
         """
     )
@@ -99,12 +98,6 @@ Examples:
         "--skip-detection",
         action="store_true",
         help="Skip detection pipeline (use existing results)"
-    )
-
-    parser.add_argument(
-        "--skip-3d",
-        action="store_true",
-        help="Skip 3D reconstruction training"
     )
 
     parser.add_argument(
@@ -135,12 +128,13 @@ Examples:
     print("""
     ================================================
       OpenSurgAI - GTC 2026 GOLDEN TICKET DEMO
+      Multi-NIM Surgical Intelligence Platform
     ================================================
 
-    Full NVIDIA-powered surgical AI pipeline:
-    - TensorRT 1,300 FPS tool classification
-    - Nemotron 70B surgical reasoning
-    - EndoGaussian 3D reconstruction (195 FPS)
+    NVIDIA-powered surgical AI pipeline:
+    - TensorRT FP16: 1,335 FPS tool classification
+    - Nemotron 49B: Surgical text reasoning
+    - Nemotron VL: Visual frame analysis
     - Interactive dashboard with HUD overlay
 
     Video: {video}
@@ -148,13 +142,13 @@ Examples:
 
     # Pipeline steps tracking
     steps_completed = 0
-    steps_total = 4
+    steps_total = 3
 
     # ══════════════════════════════════════════════════════════════
-    # STEP 1: Run Detection Pipeline (TensorRT + Nemotron)
+    # STEP 1: Run Detection Pipeline (TensorRT)
     # ══════════════════════════════════════════════════════════════
     if not args.dashboard_only and not args.skip_detection:
-        print_section("STEP 1/4: Running Detection Pipeline")
+        print_section("STEP 1/3: Running Detection Pipeline")
 
         cmd = f"python scripts/run_detection.py --video {video_id}"
         if run_step(cmd, "TensorRT tool classification + phase detection", timeout=1200):
@@ -165,52 +159,16 @@ Examples:
             if not input("Continue anyway? (y/n): ").lower().startswith('y'):
                 sys.exit(1)
     else:
-        print_section("STEP 1/4: Skipping Detection Pipeline")
+        print_section("STEP 1/3: Skipping Detection Pipeline")
         steps_completed += 1
 
     # ══════════════════════════════════════════════════════════════
-    # STEP 2: Train EndoGaussian 3D Reconstruction
-    # ══════════════════════════════════════════════════════════════
-    if not args.dashboard_only and not args.skip_3d:
-        print_section("STEP 2/4: 3D Reconstruction Training")
-
-        # Check if data is prepared
-        data_dir = project_root / "external" / "EndoGaussian" / "data" / video_id
-        if not data_dir.exists():
-            print(f"[*] Preparing data for EndoGaussian...")
-            prep_cmd = f"python scripts/prepare_cholec80_for_gaussian.py --video {video_id}"
-            if not run_step(prep_cmd, "Extract frames and estimate camera parameters", timeout=600):
-                print("[!] Data preparation failed!")
-                if not input("Continue anyway? (y/n): ").lower().startswith('y'):
-                    sys.exit(1)
-
-        # Train model (takes ~2 minutes!)
-        print(f"\n[*] Training EndoGaussian (this will be FAST - only 2 minutes!)...")
-        endogaussian_dir = project_root / "external" / "EndoGaussian"
-
-        if endogaussian_dir.exists():
-            train_cmd = f'cd "{endogaussian_dir}" && conda activate endogaussian && python train.py -s ../../data/{video_id} -m {video_id}'
-            if run_step(train_cmd, "Train Gaussian Splatting model", timeout=300):
-                steps_completed += 1
-                print("\n[+] 3D reconstruction trained!")
-            else:
-                print("\n[!] Training failed! Check EndoGaussian installation.")
-                if not input("Continue anyway? (y/n): ").lower().startswith('y'):
-                    sys.exit(1)
-        else:
-            print("[!] EndoGaussian not installed! Run: python scripts/setup_endogaussian.py")
-            steps_completed += 1  # Skip gracefully
-    else:
-        print_section("STEP 2/4: Skipping 3D Reconstruction")
-        steps_completed += 1
-
-    # ══════════════════════════════════════════════════════════════
-    # STEP 3: Render HUD Overlay Video
+    # STEP 2: Render HUD Overlay Video
     # ══════════════════════════════════════════════════════════════
     if not args.dashboard_only and not args.skip_render:
-        print_section("STEP 3/4: Rendering HUD Overlay Video")
+        print_section("STEP 2/3: Rendering HUD Overlay Video")
 
-        cmd = f"python scripts/render_demo_video.py --video {video_id}"
+        cmd = f"python scripts/run_dashboard.py --video data/cholec80/videos/{video_id}.mp4"
         if run_step(cmd, "Render professional surgical HUD overlay", timeout=1800):
             steps_completed += 1
             print("\n[+] Demo video rendered!")
@@ -219,25 +177,26 @@ Examples:
             if not input("Continue anyway? (y/n): ").lower().startswith('y'):
                 sys.exit(1)
     else:
-        print_section("STEP 3/4: Skipping HUD Rendering")
+        print_section("STEP 2/3: Skipping HUD Rendering")
         steps_completed += 1
 
     # ══════════════════════════════════════════════════════════════
-    # STEP 4: Launch Interactive Dashboard
+    # STEP 3: Launch Interactive Dashboard
     # ══════════════════════════════════════════════════════════════
-    print_section("STEP 4/4: Launching Interactive Dashboard")
+    print_section("STEP 3/3: Launching Interactive Dashboard")
 
     print(f"""
     [+] Pipeline Complete! ({steps_completed}/{steps_total} steps)
 
     Starting Streamlit dashboard...
 
-    Dashboard Features:
-    -------------------
+    Dashboard Features (3 Tabs):
+    ----------------------------
     - Overview: Video playback with HUD overlay
-    - 3D Scene: Interactive EndoGaussian reconstruction
-    - AI Analysis: Nemotron-powered surgical Q&A
-    - Compare: Multi-surgery phase analysis
+    - AI Analysis: Nemotron VL visual + Nemotron text reasoning
+    - 3D Workflow Space: Interactive procedure visualization
+
+    NIM Services: Nemotron 49B + Nemotron VL + TensorRT FP16
 
     Access: http://localhost:{args.port}
     """)

@@ -58,6 +58,11 @@ You have a STRUCTURED SUMMARY of the procedure below, including phase
 timelines, durations, instrument usage, and confidence scores from the
 computer vision system.
 
+The 7 Cholec80 surgical instruments are: Grasper, Bipolar, Hook,
+Scissors, Clipper, Irrigator, SpecimenBag.  Only reference these
+instrument names.  All timestamps are in mm:ss format — use this format
+in your answers as well (never raw seconds).
+
 When answering questions:
 - Use a warm, educational tone — like a senior resident teaching an intern.
 - Feel free to draw on general surgical knowledge about cholecystectomy
@@ -146,6 +151,21 @@ def aggregate_summary(scenes: list[dict], video_id: str) -> dict:
     _flush_segment()
 
     # Instrument counts (global and per-phase)
+    # Map COCO class names to Cholec80 surgical instruments.
+    # The scene JSONL may contain COCO-pretrained YOLO detections;
+    # we translate plausible matches and discard the rest.
+    _COCO_TO_CHOLEC80: dict[str, str] = {
+        "scissors": "Scissors",
+        "knife": "Hook",
+        "fork": "Grasper",
+        "spoon": "Irrigator",
+        "toothbrush": "Bipolar",
+    }
+    _CHOLEC80_INSTRUMENTS = {
+        "Grasper", "Bipolar", "Hook", "Scissors",
+        "Clipper", "Irrigator", "SpecimenBag",
+    }
+
     instrument_counter: Counter = Counter()
     phase_instrument_map: dict[str, Counter] = defaultdict(Counter)
 
@@ -154,7 +174,16 @@ def aggregate_summary(scenes: list[dict], video_id: str) -> dict:
         phase_name = phase.get("phase_name", "Unknown") if phase else "Unknown"
         instruments = scene.get("instruments", [])
         for inst in instruments:
-            name = inst.get("class_name", inst.get("name", "Unknown"))
+            raw_name = inst.get("class_name", inst.get("name", "Unknown"))
+            # Accept native Cholec80 names directly
+            if raw_name in _CHOLEC80_INSTRUMENTS:
+                name = raw_name
+            # Map known COCO classes to surgical equivalents
+            elif raw_name in _COCO_TO_CHOLEC80:
+                name = _COCO_TO_CHOLEC80[raw_name]
+            else:
+                # Skip non-surgical COCO detections (cake, person, etc.)
+                continue
             instrument_counter[name] += 1
             phase_instrument_map[phase_name][name] += 1
 
@@ -183,12 +212,18 @@ def aggregate_summary(scenes: list[dict], video_id: str) -> dict:
     }
 
 
+def _fmt_time(seconds: float) -> str:
+    """Format seconds as mm:ss (e.g. 125.3 -> '2:05')."""
+    m, s = divmod(int(round(seconds)), 60)
+    return f"{m}:{s:02d}"
+
+
 def format_summary_for_prompt(summary: dict) -> str:
     """Format the structured summary as readable text for the system prompt."""
     lines: list[str] = []
     lines.append(f"Video: {summary['video_id']}")
     lines.append(f"Total frames: {summary['total_frames']}")
-    lines.append(f"Duration: {summary['duration_sec']}s")
+    lines.append(f"Duration: {_fmt_time(summary['duration_sec'])}")
     lines.append(f"Phase transitions: {summary['num_phase_transitions']}")
     lines.append("")
 
@@ -196,7 +231,8 @@ def format_summary_for_prompt(summary: dict) -> str:
     for seg in summary["phase_timeline"]:
         lines.append(
             f"  {seg['phase_name']}: frames {seg['start_frame']}-{seg['end_frame']} "
-            f"({seg['start_sec']}s - {seg['end_sec']}s, {seg['duration_sec']}s, "
+            f"({_fmt_time(seg['start_sec'])} - {_fmt_time(seg['end_sec'])}, "
+            f"duration {_fmt_time(seg['duration_sec'])}, "
             f"{seg['frame_count']} frames, confidence={seg['mean_confidence']})"
         )
     lines.append("")
@@ -204,7 +240,7 @@ def format_summary_for_prompt(summary: dict) -> str:
     lines.append("=== PHASE DURATIONS (total across all segments) ===")
     for phase, dur in summary["phase_durations"].items():
         frames = summary["phase_frame_counts"].get(phase, 0)
-        lines.append(f"  {phase}: {dur}s ({frames} frames)")
+        lines.append(f"  {phase}: {_fmt_time(dur)} ({frames} frames)")
     lines.append("")
 
     lines.append("=== INSTRUMENT USAGE (total frame appearances) ===")

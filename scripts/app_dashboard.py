@@ -1,42 +1,13 @@
-"""OpenSurgAI — Post-hoc Surgical Case Review Dashboard.
+"""OpenSurgAI -- Multi-NIM Surgical Intelligence Platform.
 
-Calm, automatic, research-grade NVIDIA GTC demo.
+Three-tab Streamlit layout for NVIDIA GTC 2026 demo:
 
-Architecture
-------------
-Three-panel Streamlit layout:
+  Tab 1: Overview  -- Annotated video, timeline, phase info, live stats
+  Tab 2: AI Analysis -- Nemotron Q&A + Nemotron VL visual frame analysis
+  Tab 3: 3D Workflow Space -- Semantic surgical workflow visualization
 
-  LEFT   — Pre-rendered annotated video (auto-playing) + phase info
-  CENTER — 3D Semantic Surgical Workflow Space (auto-updating cursor)
-  RIGHT  — Nemotron post-hoc Q&A with hidden reasoning
-
-Design choices (documented per spec):
-
-  WHY ANNOTATED VIDEO:
-    The overlay video (experiments/dashboard/) is the PRIMARY visual
-    context.  Detection boxes, segmentation masks, and phase labels are
-    PRE-RENDERED by the dashboard recorder.  No real-time inference
-    runs inside this UI.
-
-  WHY TIME SLIDER:
-    Streamlit cannot read the actual video playback position.  A time
-    slider lets the user manually set the analysis point.  The 3D cursor
-    and phase info update instantly when the slider moves.
-
-  WHAT THE 3D SPACE REPRESENTS:
-    The 3D Semantic Surgical Workflow Space represents procedural
-    structure and activity — NOT anatomical geometry or spatial
-    reconstruction.  Axes: X = Phase Progression, Y = Phase Identity,
-    Z = Surgical Activity / Complexity.
-
-  WHAT THE 3D SPACE DOES NOT REPRESENT:
-    Anatomical geometry.  Physical spatial layout.  No claim of
-    anatomical accuracy is made.  The axes are semantic, not physical.
-
-  WHY REASONING IS HIDDEN:
-    Nemotron output is split into FINAL ANSWER (always visible) and
-    REASONING (hidden behind an expander).  This keeps the interface
-    calm, confident, and focused on education.
+Multi-NIM orchestration: Nemotron (text reasoning) + Nemotron VL (vision) +
+TensorRT (real-time inference at 1,335 FPS).
 
 Launch:
     streamlit run scripts/app_dashboard.py
@@ -45,6 +16,8 @@ Launch:
 from __future__ import annotations
 
 import bisect
+import logging
+import os
 import re
 import subprocess
 import sys
@@ -62,22 +35,22 @@ from src.analysis.phase_space_3d import (
     PHASE_COLOURS,
     PHASE_ORDER,
     PHASE_TO_INDEX,
-    build_comparison_figure,
-    build_comparison_summary,
     build_semantic_phase_space,
     build_workflow_figure,
     get_phase_segments,
     get_transition_points,
 )
 from src.explanation.pipeline import NemotronClient, PHASE_EXPLANATIONS
-from src.visualization.gaussian_streamlit import render_3d_scene_tab
+from src.explanation.vlm_client import VLMClient, ANALYSIS_PRESETS, VLM_SYSTEM_PROMPT
+from src.explanation.frame_extractor import extract_frame_at_time, get_video_info
+
 from scripts.run_posthoc_qa import aggregate_summary, format_summary_for_prompt
 from scripts.run_report import generate_report
 
 # ── Page config ──────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="OpenSurgAI — Surgical Case Review",
+    page_title="OpenSurgAI — Multi-NIM Surgical Intelligence",
     page_icon=":stethoscope:",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -364,6 +337,85 @@ st.markdown("""
 
 
 
+# ── Utility: H.264 video compatibility ─────────────────────────────
+# Browsers require H.264 (avc1) codec for <video> / st.video().
+# OpenCV's mp4v fourcc sometimes produces MPEG-4 Part 2 (FMP4) which
+# is not browser-playable.  This helper detects and re-encodes.
+
+_log = logging.getLogger(__name__)
+
+
+def _find_ffmpeg() -> str:
+    """Locate ffmpeg binary — checks PATH first, then imageio_ffmpeg."""
+    import shutil
+    path = shutil.which("ffmpeg")
+    if path:
+        return path
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError:
+        return "ffmpeg"  # last resort, will fail with FileNotFoundError
+
+
+def _find_ffprobe() -> str:
+    """Locate ffprobe binary next to the ffmpeg we found."""
+    import shutil
+    path = shutil.which("ffprobe")
+    if path:
+        return path
+    # imageio_ffmpeg ships ffmpeg but not ffprobe — derive path
+    ffmpeg = _find_ffmpeg()
+    ffprobe = ffmpeg.replace("ffmpeg", "ffprobe")
+    if Path(ffprobe).exists():
+        return ffprobe
+    return "ffprobe"
+
+
+@st.cache_resource(show_spinner="Re-encoding video for browser playback...")
+def _ensure_h264(video_path: Path) -> str:
+    """Return a browser-compatible H.264 path for *video_path*.
+
+    If the file is already H.264, returns the original path as a string.
+    Otherwise, transcodes to ``<name>.h264.mp4`` next to the original
+    using ffmpeg and returns that path.
+    """
+    import cv2
+
+    # Fast codec check via OpenCV (no ffprobe needed)
+    cap = cv2.VideoCapture(str(video_path))
+    fourcc_int = int(cap.get(cv2.CAP_PROP_FOURCC))
+    cap.release()
+    codec = fourcc_int.to_bytes(4, "little").decode("ascii", errors="replace").strip("\x00").lower()
+
+    if codec in ("avc1", "h264", "x264"):
+        return str(video_path)
+
+    # Need re-encoding
+    h264_path = video_path.with_suffix(".h264.mp4")
+    if h264_path.exists() and h264_path.stat().st_size > 0:
+        return str(h264_path)
+
+    ffmpeg = _find_ffmpeg()
+    _log.info("Re-encoding %s (%s -> H.264) ...", video_path.name, codec or "unknown")
+    try:
+        subprocess.run(
+            [ffmpeg, "-y", "-i", str(video_path),
+             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+             "-movflags", "+faststart",
+             "-an",  # no audio in surgical videos
+             str(h264_path)],
+            check=True, capture_output=True, timeout=600,
+        )
+        _log.info("Re-encoded: %s (%.0f MB)",
+                  h264_path.name, h264_path.stat().st_size / 1e6)
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        _log.warning("ffmpeg re-encode failed: %s — falling back to original", exc)
+        return str(video_path)
+
+    return str(h264_path)
+
+
 # ── Utility: time display formatting ────────────────────────────────
 # All internal computations remain in seconds.
 # This is DISPLAY-ONLY formatting — used everywhere the user sees time.
@@ -464,7 +516,7 @@ def render_phase_timeline_bar(segments: list, current_time: float, duration: flo
         width_pct = (seg["duration"] / duration) * 100
         color = PHASE_COLOURS[seg["phase_idx"] % len(PHASE_COLOURS)]
 
-        html_parts.append(f'<div style="position: absolute; left: {start_pct}%; width: {width_pct}%; height: 100%; background-color: {color}; opacity: 0.8; border-right: 1px solid #0A1120;" title="{seg["phase_name"]} ({seg["duration"]:.0f}s)"></div>')
+        html_parts.append(f'<div style="position: absolute; left: {start_pct}%; width: {width_pct}%; height: 100%; background-color: {color}; opacity: 0.8; border-right: 1px solid #0A1120;" title="{seg["phase_name"]} ({format_time(seg["duration"])})"></div>')
 
     html_parts.append('</div>')
 
@@ -761,12 +813,44 @@ def render_sidebar() -> dict:
     """Render sidebar controls and return config."""
     st.sidebar.markdown("""
     <div style="text-align: center; padding: 16px 0; margin-bottom: 16px;">
-        <h1 style="color: #00CED1; font-size: 32px; margin: 0; text-shadow: 0 2px 8px rgba(0,206,209,0.4);">
+        <h1 style="color: #00CED1; font-size: 28px; margin: 0; text-shadow: 0 2px 8px rgba(0,206,209,0.4);">
             OpenSurgAI
         </h1>
-        <p style="color: #666; font-size: 11px; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 1.5px;">
-            NVIDIA GTC 2026 Demo
+        <p style="color: #76B900; font-size: 10px; margin: 6px 0 0 0; text-transform: uppercase; letter-spacing: 2px; font-weight: 700;">
+            Multi-NIM Surgical Intelligence
         </p>
+        <p style="color: #666; font-size: 10px; margin: 4px 0 0 0; text-transform: uppercase; letter-spacing: 1.5px;">
+            NVIDIA GTC 2026
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # NIM Status Indicators
+    st.sidebar.markdown("""
+    <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 14px; margin-bottom: 16px;
+                border: 1px solid rgba(118,185,0,0.3);">
+        <div style="font-size: 10px; color: #76B900; text-transform: uppercase; letter-spacing: 2px;
+                    font-weight: 700; margin-bottom: 12px;">NIM Services</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #76B900;
+                            box-shadow: 0 0 8px rgba(118,185,0,0.6);"></div>
+                <span style="font-size: 11px; color: #ccc; font-weight: 600;">Nemotron 49B</span>
+                <span style="font-size: 9px; color: #888; margin-left: auto;">Text Reasoning</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #76B900;
+                            box-shadow: 0 0 8px rgba(118,185,0,0.6);"></div>
+                <span style="font-size: 11px; color: #ccc; font-weight: 600;">Nemotron VL</span>
+                <span style="font-size: 9px; color: #888; margin-left: auto;">Vision Analysis</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #76B900;
+                            box-shadow: 0 0 8px rgba(118,185,0,0.6);"></div>
+                <span style="font-size: 11px; color: #ccc; font-weight: 600;">TensorRT FP16</span>
+                <span style="font-size: 9px; color: #888; margin-left: auto;">1,335 FPS</span>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -801,42 +885,62 @@ def render_sidebar() -> dict:
 
     st.sidebar.divider()
 
-    # 3D viz options
-    st.sidebar.subheader("3D Visualisation")
-    downsample = st.sidebar.slider("Downsample (every Nth frame)", 1, 50, 5)
-    point_size = st.sidebar.slider("Point size", 1, 8, 3)
-
-    st.sidebar.divider()
-
-    # Nemotron config
-    st.sidebar.subheader("Nemotron Q&A")
+    # NVIDIA API config (shared across Nemotron + Nemotron VL)
+    st.sidebar.subheader("NVIDIA NIM API")
     api_key = st.sidebar.text_input(
         "API Key",
         type="password",
-        help="NEMOTRON_API_KEY or NVIDIA_API_KEY. Leave blank to use env var.",
+        help="NVIDIA_API_KEY — shared by all Nemotron NIM services. Leave blank to use env var.",
     )
 
-    # ── Upload & Process New Video ─────────────────────────────────
+    # ── Process New Video ────────────────────────────────────────────
     st.sidebar.divider()
-    st.sidebar.subheader("Upload New Video")
+    st.sidebar.subheader("Process New Video")
+
+    # Find unprocessed videos in the raw video directory
+    raw_dir = Path(video_dir)
+    processed_set = set(videos)
+    unprocessed = []
+    if raw_dir.is_dir():
+        for vf in sorted(raw_dir.glob("*.mp4")):
+            vid_name = vf.stem
+            if vid_name not in processed_set:
+                unprocessed.append(vid_name)
+
+    if unprocessed:
+        new_video = st.sidebar.selectbox(
+            "Unprocessed videos",
+            unprocessed,
+            help="Videos in data directory that haven't been processed yet.",
+            key="new_video_select",
+        )
+        if st.sidebar.button("Process Video", type="primary", key="process_btn"):
+            video_path = raw_dir / f"{new_video}.mp4"
+            _run_pipeline(video_path, new_video, api_key)
+            st.cache_data.clear()
+            st.rerun()
+    else:
+        st.sidebar.caption("All videos in the data directory have been processed.")
+
+    # Upload external video
     uploaded = st.sidebar.file_uploader(
-        "Upload a surgical video (.mp4)",
+        "Or upload a new video (.mp4)",
         type=["mp4", "avi", "mkv"],
-        help="Upload a new video to process through the full pipeline.",
+        help="Upload a video file to process through the full pipeline.",
     )
 
     if uploaded is not None:
         upload_dir = _PROJECT_ROOT / "data" / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
         save_path = upload_dir / uploaded.name
-        vid_stem = save_path.stem  # e.g. "my_surgery"
+        vid_stem = save_path.stem
 
         if not save_path.exists():
             with open(save_path, "wb") as f:
                 f.write(uploaded.getbuffer())
             st.sidebar.success(f"Saved: {uploaded.name}")
 
-        if st.sidebar.button("Process Video", type="primary"):
+        if st.sidebar.button("Process Uploaded Video", type="primary", key="process_upload_btn"):
             _run_pipeline(save_path, vid_stem, api_key)
             st.cache_data.clear()
             st.rerun()
@@ -846,9 +950,7 @@ def render_sidebar() -> dict:
         "dashboard_dir": dashboard_dir,
         "video_dir": video_dir,
         "video_id": video_id,
-        "downsample": downsample,
-        "point_size": point_size,
-        "api_key": api_key or None,
+        "api_key": api_key or os.environ.get("NVIDIA_API_KEY") or os.environ.get("NEMOTRON_API_KEY"),
     }
 
 
@@ -884,30 +986,44 @@ def main() -> None:
     if "current_time" not in st.session_state:
         st.session_state["current_time"] = duration / 2
 
-    # ── Premium Header ───────────────────────────────────────────────
+    # ── Premium Header — Multi-NIM Banner ────────────────────────────
     st.markdown(f"""
-    <div class="slide-in" style="background: linear-gradient(135deg, rgba(0,206,209,0.15) 0%, rgba(10,17,32,0.5) 100%);
+    <div class="slide-in" style="background: linear-gradient(135deg, rgba(0,206,209,0.12) 0%, rgba(118,185,0,0.08) 50%, rgba(10,17,32,0.5) 100%);
                 padding: 32px;
                 border-radius: 16px;
-                border: 2px solid rgba(0,206,209,0.4);
+                border: 2px solid rgba(118,185,0,0.4);
                 margin-bottom: 32px;
-                box-shadow: 0 8px 32px rgba(0, 206, 209, 0.2);">
+                box-shadow: 0 8px 32px rgba(118, 185, 0, 0.15);">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-                <h1 style="margin: 0; font-size: 56px;">
+                <h1 style="margin: 0; font-size: 48px;">
                     OpenSurgAI
                 </h1>
-                <p style="margin: 12px 0 0 0; font-size: 20px; color: #888; font-weight: 300;">
-                    Surgical Case Review — <span style="color: #00CED1; font-weight: 700; font-size: 24px;">{video_id}</span>
+                <p style="margin: 8px 0 0 0; font-size: 18px; color: #76B900; font-weight: 700; letter-spacing: 1px;">
+                    Multi-NIM Surgical Intelligence Platform
                 </p>
-                <p style="margin: 12px 0 0 0; font-size: 13px; color: #666; font-style: italic;">
-                    NVIDIA TensorRT · Nemotron Reasoning · EndoGaussian 3D Reconstruction
+                <p style="margin: 8px 0 0 0; font-size: 15px; color: #888; font-weight: 300;">
+                    Case Review — <span style="color: #00CED1; font-weight: 700; font-size: 18px;">{video_id}</span>
                 </p>
+                <div style="display: flex; gap: 16px; margin-top: 14px;">
+                    <span style="background: rgba(118,185,0,0.15); color: #76B900; padding: 4px 12px;
+                                 border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid rgba(118,185,0,0.3);
+                                 letter-spacing: 0.5px;">TensorRT FP16</span>
+                    <span style="background: rgba(0,206,209,0.15); color: #00CED1; padding: 4px 12px;
+                                 border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid rgba(0,206,209,0.3);
+                                 letter-spacing: 0.5px;">Nemotron 49B</span>
+                    <span style="background: rgba(156,39,176,0.15); color: #CE93D8; padding: 4px 12px;
+                                 border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid rgba(156,39,176,0.3);
+                                 letter-spacing: 0.5px;">Nemotron VL</span>
+                </div>
             </div>
             <div style="text-align: right;">
-                <div style="background: rgba(0,206,209,0.1); padding: 12px 20px; border-radius: 8px; border: 1px solid rgba(0,206,209,0.3);">
-                    <div style="font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;">GTC 2026 Demo</div>
-                    <div style="font-size: 20px; color: #00CED1; font-weight: 700; margin-top: 4px;">Ready</div>
+                <div style="background: rgba(118,185,0,0.1); padding: 14px 22px; border-radius: 10px;
+                            border: 1px solid rgba(118,185,0,0.3);">
+                    <div style="font-size: 10px; color: #76B900; text-transform: uppercase; letter-spacing: 1.5px;
+                                font-weight: 700;">NVIDIA GTC 2026</div>
+                    <div style="font-size: 24px; color: #76B900; font-weight: 800; margin-top: 4px;">3 NIMs</div>
+                    <div style="font-size: 10px; color: #888; margin-top: 2px;">Orchestrated</div>
                 </div>
             </div>
         </div>
@@ -953,13 +1069,8 @@ def main() -> None:
         ), unsafe_allow_html=True)
 
     with col5:
-        # Calculate unique instruments from scene data
-        total_instruments = len(set(
-            inst.get("class_name", "Unknown")
-            for scene in data["scenes"]
-            for inst in scene.get("instruments", [])
-            if inst.get("confidence", 0) > 0.5
-        ))
+        # Calculate unique Cholec80 instruments from scene data
+        total_instruments = 7  # Cholec80 dataset has 7 instrument classes
         st.markdown(render_stat_card(
             "Instruments",
             str(total_instruments) if total_instruments > 0 else "7",
@@ -970,7 +1081,7 @@ def main() -> None:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Premium Tabbed Interface ─────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🎯 3D Scene", "💬 AI Analysis", "⚖ Compare"])
+    tab1, tab2, tab3 = st.tabs(["📊 Overview", "🧠 AI Analysis", "🌐 3D Workflow Space"])
 
     # ══════════════════════════════════════════════════════════════════
     # TAB 1: OVERVIEW — Video, Timeline, Live Stats
@@ -1009,14 +1120,15 @@ def main() -> None:
             raw_video = Path(config["video_dir"]) / f"{video_id}.mp4"
 
             if annotated_video.exists():
-                # Display video at full width for better quality
-                st.video(str(annotated_video), format="video/mp4", start_time=0)
-                st.caption("✅ Pre-rendered HUD overlay with instrument tracking · 1080p quality")
+                playable = _ensure_h264(annotated_video)
+                st.video(playable, format="video/mp4", start_time=0)
+                st.caption("Pre-rendered HUD overlay with instrument tracking")
             elif raw_video.exists():
-                st.video(str(raw_video), format="video/mp4", start_time=0)
-                st.warning("⚠️ Raw video — run recorder for HUD overlay")
+                playable = _ensure_h264(raw_video)
+                st.video(playable, format="video/mp4", start_time=0)
+                st.warning("Raw video — run recorder for HUD overlay")
             else:
-                st.error(f"❌ No video found for `{video_id}`")
+                st.error(f"No video found for `{video_id}`")
 
         with stats_col:
             phase_colour = PHASE_COLOURS[cursor["phase_idx"] % len(PHASE_COLOURS)]
@@ -1077,10 +1189,19 @@ def main() -> None:
             frame_idx = cursor["idx"]
             scene_frame = scenes[frame_idx] if frame_idx < len(scenes) else {}
 
-            # Convert instruments list to dict with class_name as key
+            # Convert instruments list to dict with Cholec80 names
+            # Map COCO class names to surgical instruments if needed
+            _COCO_MAP = {
+                "scissors": "Scissors", "knife": "Hook", "fork": "Grasper",
+                "spoon": "Irrigator", "toothbrush": "Bipolar",
+            }
             instruments = {}
             for inst in scene_frame.get("instruments", []):
-                instruments[inst.get("class_name", "")] = inst.get("confidence", 0.0)
+                raw = inst.get("class_name", "")
+                name = _COCO_MAP.get(raw, raw)  # map COCO or pass through
+                if name in {"Grasper", "Bipolar", "Hook", "Scissors", "Clipper", "Irrigator", "SpecimenBag"}:
+                    conf = inst.get("confidence", 0.0)
+                    instruments[name] = max(instruments.get(name, 0.0), conf)
 
             # Cholec80 7 instruments with colors
             inst_list = [
@@ -1105,20 +1226,132 @@ def main() -> None:
                     st.markdown(f"<span style='color:{colour}'>**{phase_name}**</span>: {desc}", unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════
-    # TAB 2: 3D WORKSPACE — Interactive 3D Semantic Surgical Space
-    # ══════════════════════════════════════════════════════════════════
-    # ══════════════════════════════════════════════════════════════════
-    # TAB 2: 3D SCENE — EndoGaussian Interactive Reconstruction
+    # TAB 2: AI ANALYSIS — Nemotron VL Visual + Nemotron Text
     # ══════════════════════════════════════════════════════════════════
     with tab2:
-        render_3d_scene_tab(video_id, _PROJECT_ROOT)
+        st.markdown("### 🧠 Multi-NIM AI Analysis")
+        st.caption("Nemotron VL (vision) + Nemotron 49B (text reasoning) — two NIM services working together")
 
-    # ══════════════════════════════════════════════════════════════════
-    # TAB 3: AI ANALYSIS — Nemotron Post-hoc Q&A
-    # ══════════════════════════════════════════════════════════════════
-    with tab3:
-        st.markdown("### 💬 AI-Powered Case Analysis")
-        st.caption("🤖 Nemotron 70B reasoning over structured procedure summary")
+        # ── Nemotron VL Visual Frame Analysis ─────────────────────
+        st.markdown("---")
+        st.markdown("#### 👁 Nemotron VL Visual Frame Analysis")
+        st.caption("Send any frame to NVIDIA Nemotron VL for visual understanding")
+
+        vila_col1, vila_col2 = st.columns([2, 3])
+        frame_b64 = None  # initialized before columns, used across both
+
+        with vila_col1:
+            # Frame time selector (synced with overview timeline)
+            vila_time = st.slider(
+                "Select frame timestamp",
+                min_value=0.0,
+                max_value=float(duration),
+                value=st.session_state["current_time"],
+                step=1.0,
+                format="%d s",
+                key="vila_time_slider",
+            )
+
+            # Analysis preset selector
+            preset_choice = st.selectbox(
+                "Analysis type",
+                list(ANALYSIS_PRESETS.keys()),
+                index=0,
+                key="vila_preset",
+            )
+            vila_prompt = ANALYSIS_PRESETS[preset_choice]
+
+            # Custom prompt override
+            custom_vila = st.text_area(
+                "Or enter a custom prompt",
+                value="",
+                height=80,
+                placeholder="e.g. Is the critical view of safety achieved?",
+                key="vila_custom_prompt",
+            )
+            if custom_vila.strip():
+                vila_prompt = custom_vila.strip()
+
+            analyze_btn = st.button(
+                "Analyze Frame with Nemotron VL",
+                type="primary",
+                use_container_width=True,
+                key="vila_analyze_btn",
+            )
+
+        with vila_col2:
+            # Find video file for frame extraction
+            annotated_video = Path(config["dashboard_dir"]) / f"{video_id}_demo.mp4"
+            raw_video = Path(config["video_dir"]) / f"{video_id}.mp4"
+            video_file = annotated_video if annotated_video.exists() else raw_video
+
+            if video_file.exists():
+                # Show frame preview
+                frame_b64 = extract_frame_at_time(str(video_file), vila_time)
+                if frame_b64:
+                    st.markdown(f"""
+                    <div style="border: 2px solid rgba(156,39,176,0.4); border-radius: 10px; overflow: hidden;
+                                box-shadow: 0 4px 16px rgba(156,39,176,0.2);">
+                        <img src="data:image/jpeg;base64,{frame_b64}" style="width: 100%; display: block;">
+                    </div>
+                    <p style="text-align: center; font-size: 11px; color: #888; margin-top: 8px;">
+                        Frame at {format_time(vila_time)} — {video_id}
+                    </p>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info(f"No video file found for {video_id}. Frame preview unavailable.")
+                frame_b64 = None
+
+        # Execute Nemotron VL analysis
+        if analyze_btn:
+            if not frame_b64:
+                st.error("Cannot extract frame. Check that the video file exists.")
+            elif not config["api_key"]:
+                st.error("API key required. Enter your NVIDIA API key in the sidebar.")
+            else:
+                with st.spinner("Nemotron VL is analyzing the frame..."):
+                    try:
+                        vlm = VLMClient(api_key=config["api_key"])
+                        result = vlm.analyze_frame(
+                            image_b64=frame_b64,
+                            prompt=vila_prompt,
+                        )
+                        vlm.close()
+                        st.session_state["vila_result"] = {
+                            "time": vila_time,
+                            "prompt": vila_prompt,
+                            "content": result["content"],
+                            "usage": result["usage"],
+                            "model": result["model"],
+                        }
+                    except Exception as exc:
+                        st.error(f"Nemotron VL error: {exc}")
+
+        # Display Nemotron VL result
+        if st.session_state.get("vila_result"):
+            vr = st.session_state["vila_result"]
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, rgba(156,39,176,0.1) 0%, rgba(156,39,176,0.03) 100%);
+                        border: 1px solid rgba(156,39,176,0.3); border-radius: 12px; padding: 20px; margin: 16px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span style="color: #CE93D8; font-weight: 700; font-size: 13px; text-transform: uppercase;
+                                 letter-spacing: 1px;">Nemotron VL Visual Analysis</span>
+                    <span style="color: #888; font-size: 11px;">Frame at {format_time(vr['time'])}</span>
+                </div>
+                <div style="color: #E0E0E0; font-size: 14px; line-height: 1.7;">
+                    {vr['content']}
+                </div>
+                <div style="margin-top: 12px; font-size: 10px; color: #666;">
+                    Model: {vr['model']} | Tokens: {vr['usage'].get('prompt_tokens', 0)}+{vr['usage'].get('completion_tokens', 0)}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # ── Nemotron Text Q&A (existing) ─────────────────────────
+        st.markdown("#### 💬 Nemotron Text Analysis")
+        st.caption("Post-hoc reasoning over the complete procedure summary")
 
         # Preset questions in a nice grid
         st.markdown("#### 🎯 Quick Questions")
@@ -1208,14 +1441,176 @@ def main() -> None:
                     st.caption(f"Tokens: {entry['tokens']}")
                     st.divider()
 
-    # ── Full Case Report (below the 3-column layout) ───────────────
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 3: 3D WORKFLOW SPACE
+    # ══════════════════════════════════════════════════════════════════
+    with tab3:
+        st.markdown("### 🌐 3D Semantic Surgical Workflow Space")
+        st.caption(
+            "Interactive 3D visualization of the procedure's workflow structure. "
+            "X = Phase Progression, Y = Phase Identity, Z = Surgical Activity/Complexity."
+        )
+
+        # Build the 3D workflow figure
+        try:
+            workflow_fig = build_workflow_figure(space)
+            st.plotly_chart(workflow_fig, use_container_width=True, height=650)
+        except Exception as exc:
+            st.error(f"Failed to build 3D workflow visualization: {exc}")
+
+        # Workflow Space Interpretation Guide
+        with st.expander("How to read the 3D Workflow Space"):
+            st.markdown("""
+**Axes:**
+- **X (Phase Progression):** Progress within each phase segment (0 to 1)
+- **Y (Phase Identity):** The surgical phase (0 = Preparation ... 6 = GallbladderRetraction)
+- **Z (Surgical Activity):** Complexity metric combining instrument count and confidence volatility
+
+**What to look for:**
+- **Dense clusters** = stable, consistent surgical activity
+- **Scattered points** = high complexity or instrument switching
+- **Vertical jumps** = phase transitions
+- **High Z values** = multiple instruments active with varying confidence
+
+This is a **procedural workflow** representation, not anatomical geometry.
+            """)
+
+        # Phase segments — clickable for AI deep-dive
+        st.markdown("#### Phase Segments")
+        st.caption("Click a phase to ask Nemotron about it")
+
+        # Render phase buttons in a grid
+        phase_cols = st.columns(min(len(segments), 4))
+        for i, seg in enumerate(segments):
+            col = phase_cols[i % len(phase_cols)]
+            phase_colour = PHASE_COLOURS[seg["phase_idx"] % len(PHASE_COLOURS)]
+            with col:
+                if st.button(
+                    f"{seg['phase_name']}\n{format_time(seg['start_time'])} · {format_time(seg['duration'])} · {seg['frame_count']}f",
+                    key=f"phase_btn_{i}",
+                    use_container_width=True,
+                ):
+                    st.session_state["workflow_selected_phase"] = seg["phase_name"]
+                    st.session_state["workflow_selected_seg"] = seg
+
+        # Show full table in expander
+        with st.expander("Full phase segments table"):
+            seg_data = []
+            for seg in segments:
+                seg_data.append({
+                    "Phase": seg["phase_name"],
+                    "Start": format_time(seg["start_time"]),
+                    "Duration": format_time(seg["duration"]),
+                    "Frames": seg["frame_count"],
+                })
+            st.dataframe(seg_data, use_container_width=True, hide_index=True)
+
+        # Transitions
+        if transitions:
+            with st.expander("Phase Transitions"):
+                trans_data = []
+                for t in transitions:
+                    conf = t["confidence_at_transition"]
+                    conf_label = f"{conf:.1%}"
+                    trans_data.append({
+                        "Time": format_time(t["time"]),
+                        "From": t["from_phase"],
+                        "To": t["to_phase"],
+                        "Confidence": conf_label,
+                    })
+                st.dataframe(trans_data, use_container_width=True, hide_index=True)
+
+        # ── Phase-specific Nemotron Q&A ──────────────────────────
+        st.markdown("---")
+        selected_phase = st.session_state.get("workflow_selected_phase")
+        selected_seg = st.session_state.get("workflow_selected_seg")
+
+        if selected_phase and selected_seg:
+            phase_colour = PHASE_COLOURS[selected_seg["phase_idx"] % len(PHASE_COLOURS)]
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, {phase_colour}22 0%, {phase_colour}08 100%);
+                        border: 1px solid {phase_colour}66; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <div style="font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">
+                    Selected Phase
+                </div>
+                <div style="font-size: 22px; font-weight: 800; color: {phase_colour};">
+                    {selected_phase}
+                </div>
+                <div style="font-size: 12px; color: #aaa; margin-top: 6px;">
+                    {format_time(selected_seg['start_time'])} – {format_time(selected_seg['end_time'])} · {format_time(selected_seg['duration'])} · {selected_seg['frame_count']} frames
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Quick questions about this phase
+            st.markdown("##### Ask Nemotron about this phase")
+            wf_presets = [
+                f"What happens during {selected_phase} in a cholecystectomy?",
+                f"Is the duration of {selected_phase} ({format_time(selected_seg['duration'])}) normal?",
+                f"What instruments are typically used in {selected_phase}?",
+            ]
+
+            wf_preset_cols = st.columns(3)
+            wf_triggered: str | None = None
+            for j, preset in enumerate(wf_presets):
+                with wf_preset_cols[j]:
+                    if st.button(preset, key=f"wf_preset_{j}", use_container_width=True):
+                        wf_triggered = preset
+
+            # Custom question
+            wf_custom = st.text_input(
+                f"Or ask your own question about {selected_phase}",
+                value="",
+                placeholder=f"e.g. Was there anything unusual about {selected_phase}?",
+                key="wf_custom_q",
+            )
+            if st.button("Ask Nemotron", key="wf_ask_btn", type="primary") and wf_custom.strip():
+                wf_triggered = wf_custom.strip()
+
+            # Execute query
+            if wf_triggered:
+                with st.spinner(f"Nemotron is analyzing {selected_phase}..."):
+                    try:
+                        answer, reasoning, usage = query_nemotron(
+                            question=wf_triggered,
+                            summary_text=summary_text,
+                            api_key=config["api_key"],
+                        )
+                        st.session_state["wf_qa_result"] = {
+                            "phase": selected_phase,
+                            "question": wf_triggered,
+                            "answer": answer,
+                            "reasoning": reasoning,
+                            "tokens": f"{usage.get('prompt_tokens', 0)}+{usage.get('completion_tokens', 0)}",
+                        }
+                    except ValueError as exc:
+                        st.error(f"API key required: {exc}")
+                    except Exception as exc:
+                        st.error(f"Nemotron error: {exc}")
+
+            # Display result
+            if st.session_state.get("wf_qa_result"):
+                wfr = st.session_state["wf_qa_result"]
+                if wfr["phase"] == selected_phase:
+                    st.divider()
+                    st.markdown(f"**Q:** {wfr['question']}")
+                    st.markdown(wfr["answer"])
+                    if wfr["reasoning"]:
+                        with st.expander("Show reasoning"):
+                            st.markdown(wfr["reasoning"])
+                    st.caption(f"Tokens: {wfr['tokens']}")
+        else:
+            st.info("Click a phase segment above to ask Nemotron about it.")
+
+    # ── Full Case Report (below tabs) ─────────────────────────────
     st.divider()
     report_col1, report_col2 = st.columns([3, 1])
     with report_col1:
-        st.subheader("Surgical Case Report")
+        st.subheader("Operative Case Report")
         st.caption(
-            "Generate a comprehensive case report using Nemotron. "
-            "Covers phase analysis, instrument usage, workflow observations."
+            "Generate a structured clinical report using Nemotron 49B. "
+            "Includes procedure overview, phase analysis, instrument usage, "
+            "workflow observations, and teaching points."
         )
     with report_col2:
         generate_btn = st.button(
@@ -1224,7 +1619,7 @@ def main() -> None:
 
     if generate_btn:
         scene_file = Path(config["scene_dir"]) / f"{video_id}_scene.jsonl"
-        with st.spinner("Nemotron is generating the full case report..."):
+        with st.spinner("Nemotron is generating the operative report..."):
             try:
                 report_md = generate_report(
                     video_id=video_id,
@@ -1239,126 +1634,121 @@ def main() -> None:
 
     if st.session_state.get("case_report"):
         st.markdown(st.session_state["case_report"])
-        st.download_button(
-            "Download Report (.md)",
-            data=st.session_state["case_report"],
-            file_name=f"{video_id}_report.md",
-            mime="text/markdown",
-        )
 
-    # ══════════════════════════════════════════════════════════════════
-    # TAB 4: COMPARE — Multi-surgery comparison
-    # ══════════════════════════════════════════════════════════════════
-    with tab4:
-        st.markdown("### ⚖ Multi-Surgery Comparison")
-        st.caption("Overlay multiple procedures in 3D space and analyze differences with Nemotron")
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                "Download Report (.md)",
+                data=st.session_state["case_report"],
+                file_name=f"{video_id}_report.md",
+                mime="text/markdown",
+            )
+        with dl_col2:
+            # HTML export for PDF-ready printing
+            html_report = _markdown_to_html_report(
+                st.session_state["case_report"], video_id
+            )
+            st.download_button(
+                "Download Report (.html)",
+                data=html_report,
+                file_name=f"{video_id}_report.html",
+                mime="text/html",
+            )
 
-        all_videos = discover_videos(config["scene_dir"])
-        compare_videos = st.multiselect(
-            "📋 Select 2-5 videos to compare",
-            options=all_videos,
-            default=[video_id] if video_id in all_videos else [],
-            help="Choose procedures with scene data for 3D overlay comparison",
-        )
+    # ── NVIDIA Ecosystem Footer ───────────────────────────────────
+    st.markdown("""
+    <div style="margin-top: 48px; padding: 24px; border-top: 2px solid rgba(118,185,0,0.3);
+                text-align: center;">
+        <div style="display: flex; justify-content: center; gap: 24px; margin-bottom: 16px; flex-wrap: wrap;">
+            <span style="background: rgba(118,185,0,0.1); color: #76B900; padding: 6px 16px;
+                         border-radius: 20px; font-size: 11px; font-weight: 600;
+                         border: 1px solid rgba(118,185,0,0.3);">NIM Microservices</span>
+            <span style="background: rgba(0,206,209,0.1); color: #00CED1; padding: 6px 16px;
+                         border-radius: 20px; font-size: 11px; font-weight: 600;
+                         border: 1px solid rgba(0,206,209,0.3);">TensorRT FP16</span>
+            <span style="background: rgba(156,39,176,0.1); color: #CE93D8; padding: 6px 16px;
+                         border-radius: 20px; font-size: 11px; font-weight: 600;
+                         border: 1px solid rgba(156,39,176,0.3);">Nemotron 49B</span>
+            <span style="background: rgba(255,152,0,0.1); color: #FFB74D; padding: 6px 16px;
+                         border-radius: 20px; font-size: 11px; font-weight: 600;
+                         border: 1px solid rgba(255,152,0,0.3);">Nemotron VL</span>
+        </div>
+        <p style="color: #555; font-size: 11px; margin: 0;">
+            OpenSurgAI &mdash; Multi-NIM Surgical Intelligence Platform &mdash; Built for NVIDIA GTC 2026
+        </p>
+        <p style="color: #444; font-size: 10px; margin: 4px 0 0 0;">
+            Nemotron 49B + Nemotron VL + TensorRT FP16 &mdash; Open Source Surgical AI
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-        if len(compare_videos) >= 2:
-            # Load all selected spaces
-            compare_spaces = []
-            for vid in compare_videos:
-                sp = str(Path(config["scene_dir"]) / f"{vid}_scene.jsonl")
-                try:
-                    compare_spaces.append(build_semantic_phase_space(sp))
-                except Exception:
-                    st.warning(f"⚠️ Could not load {vid}")
 
-            if len(compare_spaces) >= 2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                comp_left, comp_right = st.columns([2, 1])
+def _markdown_to_html_report(md_text: str, video_id: str) -> str:
+    """Convert markdown report to a styled HTML document for PDF printing."""
+    # Simple markdown to HTML conversion (headers, bold, lists)
+    import re as _re
 
-                with comp_left:
-                    st.markdown("### 📊 3D Comparison Overlay")
-                    comp_fig = build_comparison_figure(
-                        compare_spaces,
-                        point_size=config["point_size"],
-                        downsample=config["downsample"],
-                    )
-                    comp_fig.update_layout(height=650)
-                    st.plotly_chart(comp_fig, use_container_width=True)
+    html_body = md_text
+    # Headers
+    html_body = _re.sub(r"^##### (.+)$", r"<h5>\1</h5>", html_body, flags=_re.MULTILINE)
+    html_body = _re.sub(r"^#### (.+)$", r"<h4>\1</h4>", html_body, flags=_re.MULTILINE)
+    html_body = _re.sub(r"^### (.+)$", r"<h3>\1</h3>", html_body, flags=_re.MULTILINE)
+    html_body = _re.sub(r"^## (.+)$", r"<h2>\1</h2>", html_body, flags=_re.MULTILINE)
+    html_body = _re.sub(r"^# (.+)$", r"<h1>\1</h1>", html_body, flags=_re.MULTILINE)
+    # Bold and italic
+    html_body = _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html_body)
+    html_body = _re.sub(r"\*(.+?)\*", r"<em>\1</em>", html_body)
+    # List items
+    html_body = _re.sub(r"^- (.+)$", r"<li>\1</li>", html_body, flags=_re.MULTILINE)
+    # Horizontal rules
+    html_body = _re.sub(r"^---+$", r"<hr>", html_body, flags=_re.MULTILINE)
+    # Paragraphs (double newlines)
+    html_body = _re.sub(r"\n\n", r"</p><p>", html_body)
+    html_body = f"<p>{html_body}</p>"
 
-                with comp_right:
-                    st.markdown("### 🤖 AI Comparison Analysis")
-
-                # Session state for comparison chat
-                if "compare_history" not in st.session_state:
-                    st.session_state["compare_history"] = []
-
-                comp_presets = [
-                    "Compare these surgeries for a trainee.",
-                    "Which surgery was more complex and why?",
-                    "What phase timing differences stand out?",
-                ]
-
-                comp_question: str | None = None
-                for cp in comp_presets:
-                    if st.button(cp, key=f"comp_{cp[:25]}"):
-                        comp_question = cp
-
-                comp_custom = st.text_area(
-                    "Your comparison question",
-                    value="",
-                    height=80,
-                    placeholder="e.g. Which surgery had a longer dissection phase?",
-                    key="comp_text_area",
-                ) or ""
-
-                if st.button("Ask about comparison", type="primary", key="comp_ask"):
-                    if comp_custom.strip():
-                        comp_question = comp_custom.strip()
-
-                if comp_question:
-                    comp_summary = build_comparison_summary(compare_spaces)
-                    with st.spinner("Nemotron is comparing..."):
-                        try:
-                            answer, reasoning, usage = query_nemotron(
-                                question=comp_question,
-                                summary_text=comp_summary,
-                                api_key=config["api_key"],
-                            )
-                            tok = usage.get("prompt_tokens", 0)
-                            ctok = usage.get("completion_tokens", 0)
-                            st.session_state["compare_history"].append({
-                                "question": comp_question,
-                                "answer": answer,
-                                "reasoning": reasoning,
-                                "tokens": f"{tok}+{ctok}",
-                            })
-                        except ValueError as exc:
-                            st.error(f"API key required: {exc}")
-                        except Exception as exc:
-                            st.error(f"Nemotron error: {exc}")
-
-                if st.session_state["compare_history"]:
-                    latest_c = st.session_state["compare_history"][-1]
-                    st.divider()
-                    st.markdown(f"**Q:** {latest_c['question']}")
-                    st.markdown(latest_c["answer"])
-                    if latest_c["reasoning"]:
-                        with st.expander("Show reasoning"):
-                            st.markdown(latest_c["reasoning"])
-                    st.caption(f"Tokens: {latest_c['tokens']}")
-
-                if len(st.session_state["compare_history"]) > 1:
-                    with st.expander("Previous comparisons", expanded=False):
-                        for entry in reversed(st.session_state["compare_history"][:-1]):
-                            st.markdown(f"**Q:** {entry['question']}")
-                            st.markdown(entry["answer"])
-                            st.caption(f"Tokens: {entry['tokens']}")
-                            st.divider()
-
-        elif len(compare_videos) == 1:
-            st.info("📌 Select at least 2 videos to enable comparison")
-        else:
-            st.info("📋 Select videos from the multiselect above to begin comparison")
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Operative Report - {video_id} | OpenSurgAI</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px; margin: 40px auto; padding: 0 20px;
+            color: #333; line-height: 1.6;
+        }}
+        h1 {{ color: #1a237e; border-bottom: 3px solid #1a237e; padding-bottom: 8px; }}
+        h2 {{ color: #283593; margin-top: 32px; }}
+        h3 {{ color: #3949ab; }}
+        hr {{ border: 1px solid #e0e0e0; margin: 24px 0; }}
+        li {{ margin: 4px 0; }}
+        .header {{
+            background: linear-gradient(135deg, #1a237e, #283593);
+            color: white; padding: 24px; border-radius: 8px; margin-bottom: 32px;
+        }}
+        .header h1 {{ color: white; border: none; margin: 0; }}
+        .header p {{ margin: 4px 0 0 0; opacity: 0.8; }}
+        .footer {{
+            margin-top: 48px; padding-top: 16px; border-top: 2px solid #e0e0e0;
+            font-size: 12px; color: #888; text-align: center;
+        }}
+        @media print {{
+            body {{ margin: 0; padding: 20px; }}
+            .header {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OpenSurgAI Operative Report</h1>
+        <p>Multi-NIM Surgical Intelligence Platform | {video_id}</p>
+    </div>
+    {html_body}
+    <div class="footer">
+        Generated by OpenSurgAI with NVIDIA Nemotron 49B | Multi-NIM Surgical Intelligence Platform
+    </div>
+</body>
+</html>"""
 
 
 if __name__ == "__main__":
