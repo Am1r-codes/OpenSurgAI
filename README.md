@@ -1,8 +1,8 @@
 # OpenSurgAI
 
-**AI-powered surgical workflow analysis for laparoscopic cholecystectomy.**
+**Multi-NIM Surgical Intelligence Platform for laparoscopic cholecystectomy.**
 
-End-to-end pipeline combining computer vision (ResNet50 fine-tuned on Cholec80) with NVIDIA Nemotron Super 49B for post-hoc surgical reasoning, multi-surgery comparison, and case review.  Includes TensorRT-optimised inference at **1,300+ FPS**.  Built on the [Cholec80](http://camma.u-strasbg.fr/datasets) dataset.
+End-to-end pipeline orchestrating **3 NVIDIA NIM services** — TensorRT FP16 inference at **1,335 FPS**, Nemotron Super 49B for post-hoc surgical reasoning, and Nemotron VL for frame-level visual analysis.  Built on the [Cholec80](http://camma.u-strasbg.fr/datasets) dataset.
 
 > Submitted for the NVIDIA GTC 2026 Golden Ticket.
 
@@ -10,7 +10,7 @@ End-to-end pipeline combining computer vision (ResNet50 fine-tuned on Cholec80) 
 
 ## What it does
 
-OpenSurgAI processes surgical videos through a multi-stage vision pipeline, then maps the results into a **3D Semantic Surgical Workflow Space** — a novel representation where each frame becomes a point in a three-dimensional procedural landscape.  A Nemotron-powered assistant can then reason over the full procedure, generate case reports, and answer educational questions.
+OpenSurgAI processes surgical videos through a multi-stage vision pipeline, then maps the results into a **3D Semantic Surgical Workflow Space** — a novel representation where each frame becomes a point in a three-dimensional procedural landscape.  Three NIM services work together: TensorRT handles real-time instrument detection on the local GPU, Nemotron 49B reasons over the full procedure for case reports and Q&A, and Nemotron VL provides frame-level visual understanding.
 
 **This is not real-time narration.  This is not anatomical 3D reconstruction.**
 It is structured, post-hoc surgical case review powered by NVIDIA AI.
@@ -48,16 +48,15 @@ Surgical Video (Cholec80)
     |     +----+----+
     |     |         |
     v     v         v
- Streamlit Dashboard
- +-------+--------+---------+
- | LEFT  | CENTER |  RIGHT  |
- | Video | 3D Viz | Nemotron|
- +-------+--------+---------+
-              |
-              v
-     Nemotron Super 49B
-     (case reports, Q&A,
-      multi-surgery comparison)
+ Streamlit Dashboard (3 tabs)
+ +-----------+-----------+----------+
+ | Overview  |AI Analysis| Workflow |
+ | Video+HUD | VL+Q&A    | 3D Space |
+ +-----------+-----------+----------+
+         |           |
+         v           v
+  Nemotron 49B   Nemotron VL
+  (Q&A, reports) (visual analysis)
 ```
 
 ### Pipeline stages
@@ -69,6 +68,7 @@ Surgical Video (Cholec80)
 | TensorRT export | `torch_tensorrt` (FP16) | Optimised engines — 1,335 FPS on RTX 5060 Ti |
 | Scene assembly | `run_scene_assembly.py` | Unified per-frame JSONL |
 | Explanation | Nemotron Super 49B | System commentary per phase transition |
+| Visual analysis | Nemotron VL | Frame-level surgical scene understanding |
 | 3D Workflow Space | `phase_space_3d.py` | Semantic 3D point cloud + trajectory |
 | Dashboard | Streamlit | Interactive case review UI |
 | Case report | Nemotron Super 49B | Structured markdown report |
@@ -101,10 +101,9 @@ This produces:
 | Phase recognition | ResNet50 trained with `torchvision` |
 | Tool classification | ResNet50 multi-label classifier (Cholec80-trained, 94.1% accuracy) |
 | TensorRT optimisation | `torch_tensorrt` FP16 — **1,335 FPS** inference |
-| Natural language reasoning | **NVIDIA Nemotron Super 49B** via NIM API |
-| Post-hoc Q&A | Nemotron chat completions |
-| Case report generation | Nemotron structured generation |
-| Multi-surgery comparison | Nemotron comparative analysis |
+| Text reasoning (NIM 1) | **NVIDIA Nemotron Super 49B** — Q&A, case reports, comparative analysis |
+| Visual analysis (NIM 2) | **NVIDIA Nemotron VL** — frame-level surgical scene understanding |
+| Local GPU inference (NIM 3) | **TensorRT FP16** — real-time instrument detection |
 
 ---
 
@@ -184,7 +183,7 @@ OpenSurgAI/
     detection/      # ResNet50 tool classifier + dataset
     phase/          # ResNet50 phase recognition
     scene/          # Scene assembly (JSONL)
-    explanation/    # Nemotron explanation pipeline
+    explanation/    # Nemotron explanation pipeline + VLM client + frame extractor
     analysis/       # 3D Semantic Workflow Space + multi-surgery comparison
     dashboard/      # Overlay renderer + video recorder
     video.py        # Video I/O utilities
@@ -234,13 +233,13 @@ OpenSurgAI/
 
 ## Dashboard
 
-The Streamlit dashboard provides a three-panel case review interface:
+The Streamlit dashboard provides a three-tab case review interface:
 
-- **LEFT** — Pre-rendered annotated video (auto-playing) with auto-synced phase info and a **time slider** to scrub the 3D cursor to any point in the procedure
-- **CENTER** — Interactive 3D Semantic Surgical Workflow Space with trajectory lines and active phase highlighting
-- **RIGHT** — Nemotron Q&A with preset questions and hidden reasoning
+- **Tab 1: Overview** — Pre-rendered HUD overlay video with phase timeline, live instrument tracking, confidence bars, and circular progress indicators
+- **Tab 2: AI Analysis** — Nemotron VL visual frame analysis (select any frame, choose analysis preset) + Nemotron 49B post-hoc Q&A with structured procedure summary and hidden reasoning
+- **Tab 3: 3D Workflow Space** — Interactive Plotly 3D scatter visualization with trajectory lines, phase segments, and transition tables
 
-A virtual playback clock provides approximate synchronisation between video playback and UI state.  Full case reports can be generated with one click.
+Below the tabs: one-click operative case report generation (Nemotron 49B) with Markdown and styled HTML export.
 
 ### Multi-surgery comparison
 
@@ -313,5 +312,6 @@ The multi-label classifier was trained on Cholec80 binary tool presence annotati
 
   > A.P. Twinanda, S. Shehata, D. Mutter, J. Marescaux, M. de Mathelin, N. Padoy. *EndoNet: A Deep Architecture for Recognition Tasks on Laparoscopic Videos.* IEEE Transactions on Medical Imaging (TMI), 2017.
 
-- **NVIDIA Nemotron Super 49B**: NVIDIA NIM API
+- **NVIDIA Nemotron Super 49B**: NVIDIA NIM API (text reasoning)
+- **NVIDIA Nemotron VL**: NVIDIA NIM API (visual analysis)
 - **NVIDIA TensorRT**: via `torch_tensorrt` for FP16 inference optimisation
