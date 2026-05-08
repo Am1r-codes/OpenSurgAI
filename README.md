@@ -8,6 +8,40 @@ End-to-end pipeline orchestrating **3 NVIDIA NIM services** — TensorRT FP16 in
 
 ---
 
+## About this project
+
+OpenSurgAI was built as a research prototype for the NVIDIA GTC 2026 
+Golden Ticket Contest. I'm a first-year AI bachelor student at the 
+University of Amsterdam, and I built this using Claude Code as my 
+primary implementation tool. My role was system design, NIM service 
+orchestration, dataset selection, and the design of the 3D Semantic 
+Workflow Space metric. The implementation — model training scripts, 
+inference pipelines, dashboard UI, TensorRT export, and architecture 
+— was generated and iterated with Claude Code.
+
+The goal was to explore what one motivated student can build with 
+modern AI tooling in the surgical AI space. The system works on 
+real Cholec80 data, but I'm still learning the underlying ML and 
+won't be able to defend every implementation detail without first 
+going back through the code with someone (or with Claude) to study 
+it. If you're interested in the project, I'd love to talk — just 
+know I'm at the beginning of my journey, not the end of it.
+
+---
+
+## Demo
+
+A 100-second walkthrough of the dashboard processing video49 from 
+the Cholec80 dataset:
+
+https://user-images.githubusercontent.com/.../demo.mp4
+
+The demo shows: phase timeline navigation, the HUD-overlaid surgical 
+video, Nemotron VL frame analysis, Nemotron 49B Q&A on individual 
+phases, and the 3D Semantic Workflow Space.
+
+---
+
 ## What it does
 
 OpenSurgAI processes surgical videos through a multi-stage vision pipeline, then maps the results into a **3D Semantic Surgical Workflow Space** — a novel representation where each frame becomes a point in a three-dimensional procedural landscape.  Three NIM services work together: TensorRT handles real-time instrument detection on the local GPU, Nemotron 49B reasons over the full procedure for case reports and Q&A, and Nemotron VL provides frame-level visual understanding.
