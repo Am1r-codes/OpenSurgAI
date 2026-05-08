@@ -34,7 +34,7 @@ know I'm at the beginning of my journey, not the end of it.
 A 100-second walkthrough of the dashboard processing video49 from 
 the Cholec80 dataset:
 
-[https://user-images.githubusercontent.com/.../demo.mp4](https://github.com/user-attachments/assets/2ec63710-ed4d-40db-958e-57c7d9c18a7b)
+[https://user-images.githubusercontent.com/.../demo.mp4](https://github.com/user-attachments/assets/8e340229-38c6-42c9-ada0-68420f158317)
 
 The demo shows: phase timeline navigation, the HUD-overlaid surgical 
 video, Nemotron VL frame analysis, Nemotron 49B Q&A on individual 
